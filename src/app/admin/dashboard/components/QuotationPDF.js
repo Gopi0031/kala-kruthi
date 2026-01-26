@@ -628,7 +628,7 @@ autoTable(doc, {
   contentY += 14
 }
 
-contentY += 24   // 👈 adds vertical space
+contentY += 2   // 👈 adds vertical space
 
   /* ---------- PAYMENT SUMMARY ---------- */
   doc.setDrawColor(...THEME_COLOR)

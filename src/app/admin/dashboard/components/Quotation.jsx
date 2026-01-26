@@ -627,7 +627,7 @@ const downloadCustomerPDF = () => {
     'Mature Function', 
     'Engagement',
     'Haldi',
-    'Sangith',
+    'Sangeeth',
     'Formalties',
     'Marriage',
     'Reception',
