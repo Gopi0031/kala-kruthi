@@ -2,8 +2,7 @@
 'use client'
 import React, { useState } from 'react'
 import { generateInvoicePDF } from "./InvoicePDF"
-
-
+import { generateQuotationPDF, generateCustomerQuotationPDF } from './QuotationPDF'
 import { formatAmount } from './constants'
 
 export default function CustomerDetails({
@@ -30,53 +29,136 @@ export default function CustomerDetails({
   handleDeleteAllCustomers,
   loading
 }) {
- const [customerQuotations, setCustomerQuotations] = useState({})
-const loadCustomerQuotations = async (customerId) => {
-  if (!customerId) return
+  const [customerQuotations, setCustomerQuotations] = useState({})
+  const [equipmentList, setEquipmentList] = useState([])
 
-  try {
-    const res = await fetch(`/api/quotations?customerId=${customerId}`)
+  const loadCustomerQuotations = async (customerId) => {
+    if (!customerId) return
 
-    if (!res.ok) return
+    try {
+      const res = await fetch(`/api/quotations?customerId=${customerId}`)
 
-    const text = await res.text()
-    if (!text) {
+      if (!res.ok) return
+
+      const text = await res.text()
+      if (!text) {
+        setCustomerQuotations(prev => ({
+          ...prev,
+          [customerId]: []
+        }))
+        return
+      }
+
+      const data = JSON.parse(text)
+
       setCustomerQuotations(prev => ({
         ...prev,
-        [customerId]: []
+        [customerId]: data
       }))
-      return
+
+      // Load equipment list for PDF generation
+      if (equipmentList.length === 0) {
+        const equipmentRes = await fetch('/api/quotation-pricing')
+        const equipmentData = await equipmentRes.json()
+        setEquipmentList(equipmentData.items || [])
+      }
+    } catch (err) {
+      console.error("Failed to load quotations", err)
     }
-
-    const data = JSON.parse(text)
-
-    setCustomerQuotations(prev => ({
-      ...prev,
-      [customerId]: data
-    }))
-  } catch (err) {
-    console.error("Failed to load quotations", err)
   }
-}
-  
-const downloadBase64PDF = (base64, fileName) => {
-  const link = document.createElement("a")
-  link.href = `data:application/pdf;base64,${base64}`
-  link.download = fileName
-  link.click()
-}
+
+  // ✅ Generate PDF from saved quotation data
+  const generateAndDownloadPDF = async (quotationData, customer, pdfType) => {
+    try {
+      let currentEquipmentList = equipmentList
+
+      // Load equipment list if not already loaded
+      if (!currentEquipmentList.length) {
+        const equipmentRes = await fetch('/api/quotation-pricing')
+        const equipmentData = await equipmentRes.json()
+        currentEquipmentList = equipmentData.items || []
+        setEquipmentList(currentEquipmentList)
+      }
+
+      // Calculate totals from saved quotation data
+      const calculateTotalsFromData = (qData) => {
+        let equipmentActualTotal = 0
+        let equipmentCustomerTotal = 0
+
+        if (qData.selectedEquipment) {
+          Object.keys(qData.selectedEquipment).forEach(eventType => {
+            const eventEquipment = qData.selectedEquipment[eventType] || []
+            eventEquipment.forEach(eq => {
+              if (eq.selected && eq.equipmentId && eq.equipmentId !== 'Not Selected') {
+                const quantity = eq.quantity || 1
+                equipmentActualTotal += (eq.unitActualPrice || 0) * quantity
+                equipmentCustomerTotal += (eq.unitCustomerPrice || 0) * quantity
+              }
+            })
+          })
+        }
+
+        const sheetsQuantity = parseInt(qData.sheetsCount) || 0
+        const sheetsPricePerSheet = qData.sheetsPricePerSheet || 0
+        const sheetsActualPricePerSheet = qData.sheetsActualPricePerSheet || 0
+        const sheetsCustomerTotal = sheetsQuantity * sheetsPricePerSheet
+        const sheetsActualTotal = sheetsQuantity * sheetsActualPricePerSheet
+
+        const actualGrandTotal = equipmentActualTotal + sheetsActualTotal
+        const customerGrandTotal = equipmentCustomerTotal + sheetsCustomerTotal
+
+        const discountPercent = parseFloat(qData.discount) || 0
+        const discountAmount = Math.round((customerGrandTotal * discountPercent) / 100)
+        const finalTotal = customerGrandTotal - discountAmount
+
+        const formatNumber = (num) =>
+          Math.round(num)
+            .toString()
+            .replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+
+        return {
+          equipmentActualTotal: formatNumber(equipmentActualTotal),
+          equipmentTotal: formatNumber(equipmentCustomerTotal),
+          sheetsActualTotal: formatNumber(sheetsActualTotal),
+          sheetsTotal: formatNumber(sheetsCustomerTotal),
+          actualGrandTotal: formatNumber(actualGrandTotal),
+          grandTotal: formatNumber(customerGrandTotal),
+          discountAmount: formatNumber(discountAmount),
+          discountPercent,
+          total: formatNumber(finalTotal)
+        }
+      }
+
+      const totals = calculateTotalsFromData(quotationData)
+
+      // Generate PDF based on type
+      let pdf
+      if (pdfType === "owner") {
+        pdf = generateQuotationPDF(quotationData, () => totals, true, currentEquipmentList)
+      } else {
+        pdf = generateCustomerQuotationPDF(quotationData, () => totals, currentEquipmentList)
+      }
+
+      // Download PDF
+      const fileName = `${customer.name}_${pdfType === "owner" ? "Owner" : "Customer"}_Quotation.pdf`
+      pdf.save(fileName)
+    } catch (err) {
+      console.error("Failed to generate PDF:", err)
+      alert("Failed to generate PDF. Please try again.")
+    }
+  }
 
   const filteredCustomers = customers
-  .filter((c) => {
-    if (customerFilter === "All") return true
-    return c.status === customerFilter
-  })
-  .slice()
-  .sort((a, b) => {
-    const dateA = a.date ? new Date(a.date) : new Date(0)
-    const dateB = b.date ? new Date(b.date) : new Date(0)
-    return dateB - dateA
-  })
+    .filter((c) => {
+      if (customerFilter === "All") return true
+      return c.status === customerFilter
+    })
+    .slice()
+    .sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date(0)
+      const dateB = b.date ? new Date(b.date) : new Date(0)
+      return dateB - dateA
+    })
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false
 
@@ -382,40 +464,37 @@ const downloadBase64PDF = (base64, fileName) => {
                   Advance #{index + 1}
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "12px" }}>
-                 <div>
-  <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
-    Amount (₹)
-  </label>
-
-  <input
-  type="number"
-  value={adv.amount}
-  onChange={(e) => {
-    updateAdvance(index, "amount", e.target.value)
-    updateAdvance(index, "isAuto", false)
-  }}
-  style={{
-    width: "100%",
-    padding: "8px",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    fontSize: "13px",
-    background: adv.isAuto ? "#f0fdf4" : "white",
-  }}
-/>
-
-{adv.isAuto && index < 3 && (
-  <p style={{ fontSize: "10px", color: "#16a34a", marginTop: "4px" }}>
-    Auto • 25% of Total
-  </p>
-)}
-
-{!adv.isAuto && adv.amount && (
-  <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "4px" }}>
-    Manual amount
-  </p>
-)}
-</div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
+                      Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={adv.amount}
+                      onChange={(e) => {
+                        updateAdvance(index, "amount", e.target.value)
+                        updateAdvance(index, "isAuto", false)
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        background: adv.isAuto ? "#f0fdf4" : "white",
+                      }}
+                    />
+                    {adv.isAuto && index < 3 && (
+                      <p style={{ fontSize: "10px", color: "#16a34a", marginTop: "4px" }}>
+                        Auto • 25% of Total
+                      </p>
+                    )}
+                    {!adv.isAuto && adv.amount && (
+                      <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "4px" }}>
+                        Manual amount
+                      </p>
+                    )}
+                  </div>
 
                   <div>
                     <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
@@ -434,78 +513,75 @@ const downloadBase64PDF = (base64, fileName) => {
                       }}
                     />
                   </div>
-                 <div>
-  <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
-    Payment Mode
-  </label>
 
-  <select
-    value={adv.paymentMode}
-    onChange={(e) => updateAdvance(index, "paymentMode", e.target.value)}
-    style={{
-      width: "100%",
-      padding: "8px",
-      border: "1px solid #d1d5db",
-      borderRadius: "6px",
-      fontSize: "13px",
-      marginBottom: adv.paymentMode === "UPI" ? "8px" : "0",
-    }}
-  >
-    <option value="">Select</option>
-    <option value="Cash">Cash</option>
-    <option value="UPI">UPI</option>
-    <option value="Card">Card</option>
-    <option value="Bank Transfer">Bank Transfer</option>
-  </select>
+                  <div>
+                    <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
+                      Payment Mode
+                    </label>
+                    <select
+                      value={adv.paymentMode}
+                      onChange={(e) => updateAdvance(index, "paymentMode", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        marginBottom: adv.paymentMode === "UPI" ? "8px" : "0",
+                      }}
+                    >
+                      <option value="">Select</option>
+                      <option value="Cash">Cash</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Card">Card</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
 
-  {/* UPI App Selection */}
-  {adv.paymentMode === "UPI" && (
-  <>
-    <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
-      UPI App
-    </label>
+                    {/* UPI App Selection */}
+                    {adv.paymentMode === "UPI" && (
+                      <>
+                        <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
+                          UPI App
+                        </label>
+                        <select
+                          value={adv.upiApp || ""}
+                          onChange={(e) => updateAdvance(index, "upiApp", e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "13px",
+                            marginBottom: adv.upiApp === "Other" ? "6px" : "0",
+                          }}
+                        >
+                          <option value="">Select UPI App</option>
+                          <option value="GPay">GPay</option>
+                          <option value="PhonePe">PhonePe</option>
+                          <option value="Paytm">Paytm</option>
+                          <option value="Navi">Navi</option>
+                          <option value="Other">Other</option>
+                        </select>
 
-    <select
-      value={adv.upiApp || ""}
-      onChange={(e) => updateAdvance(index, "upiApp", e.target.value)}
-      style={{
-        width: "100%",
-        padding: "8px",
-        border: "1px solid #d1d5db",
-        borderRadius: "6px",
-        fontSize: "13px",
-        marginBottom: adv.upiApp === "Other" ? "6px" : "0",
-      }}
-    >
-      <option value="">Select UPI App</option>
-      <option value="GPay">GPay</option>
-      <option value="PhonePe">PhonePe</option>
-      <option value="Paytm">Paytm</option>
-      <option value="Navi">Navi</option>
-      <option value="Other">Other</option>
-    </select>
-
-    {/* Manual UPI input when Other is selected */}
-    {adv.upiApp === "Other" && (
-      <input
-        type="text"
-        placeholder="Enter UPI app name"
-        value={adv.otherUpi || ""}
-        onChange={(e) => updateAdvance(index, "otherUpi", e.target.value)}
-        style={{
-          width: "100%",
-          padding: "8px",
-          border: "1px solid #d1d5db",
-          borderRadius: "6px",
-          fontSize: "13px",
-        }}
-      />
-    )}
-  </>
-)}
-
-</div>
-
+                        {/* Manual UPI input when Other is selected */}
+                        {adv.upiApp === "Other" && (
+                          <input
+                            type="text"
+                            placeholder="Enter UPI app name"
+                            value={adv.otherUpi || ""}
+                            onChange={(e) => updateAdvance(index, "otherUpi", e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "8px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "13px",
+                            }}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -583,7 +659,7 @@ const downloadBase64PDF = (base64, fileName) => {
         </div>
       )}
 
-      {/* Customer List - MOBILE: Cards, DESKTOP: Table */}
+      {/* Customer List - MOBILE & DESKTOP */}
       {!isAdding && (
         <div style={{
           marginBottom: isMobile ? "100px" : "0"
@@ -628,27 +704,25 @@ const downloadBase64PDF = (base64, fileName) => {
                       padding: "16px",
                       color: "white",
                     }}>
-                  <h3
-  onClick={() => {
-    const isOpening = openPaymentRowId !== customerId
-    setOpenPaymentRowId(isOpening ? customerId : null)
-    setOpenAdvanceId(null)
+                      <h3
+                        onClick={() => {
+                          const isOpening = openPaymentRowId !== customerId
+                          setOpenPaymentRowId(isOpening ? customerId : null)
+                          setOpenAdvanceId(null)
 
-    if (isOpening) {
-      loadCustomerQuotations(customerId)
-    }
-  }}
-
-  style={{
-    fontSize: "16px",
-    fontWeight: "700",
-    marginBottom: "4px",
-    cursor: "pointer",
-  }}
->
-  {customer.name}
-</h3>
-
+                          if (isOpening) {
+                            loadCustomerQuotations(customerId)
+                          }
+                        }}
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: "700",
+                          marginBottom: "4px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {customer.name}
+                      </h3>
                       <p style={{ fontSize: "12px", opacity: 0.9 }}>
                         📅 {customer.date || "N/A"}
                       </p>
@@ -725,25 +799,7 @@ const downloadBase64PDF = (base64, fileName) => {
                       </div>
 
                       {/* Action Buttons */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                        {/* <button
-                          onClick={() => {
-                            setOpenPaymentRowId(openPaymentRowId === customerId ? null : customerId)
-                            setOpenAdvanceId(null)
-                          }}
-                          style={{
-                            padding: "10px",
-                            background: "#3b82f6",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {openPaymentRowId === customerId ? "Hide" : "View"}
-                        </button> */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
                         <button
                           onClick={() => {
                             handleEditCustomer(customer)
@@ -826,19 +882,19 @@ const downloadBase64PDF = (base64, fileName) => {
                                   </div>
                                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#6b7280" }}>
                                     <span>📅 {adv.date || "N/A"}</span>
-                                   <span>
-                                    💳 {adv.paymentMode}
-                                    {adv.paymentMode === "UPI" && (
-                                      <>
-                                        {" "}
-                                        (
-                                        {adv.upiApp === "Other"
-                                          ? adv.otherUpi || "Other"
-                                          : adv.upiApp}
-                                        )
-                                      </>
-                                    )}
-                                  </span>
+                                    <span>
+                                      💳 {adv.paymentMode}
+                                      {adv.paymentMode === "UPI" && (
+                                        <>
+                                          {" "}
+                                          (
+                                          {adv.upiApp === "Other"
+                                            ? adv.otherUpi || "Other"
+                                            : adv.upiApp}
+                                          )
+                                        </>
+                                      )}
+                                    </span>
                                   </div>
                                 </div>
                               ))}
@@ -873,54 +929,78 @@ const downloadBase64PDF = (base64, fileName) => {
                                 No advance payments recorded yet.
                               </p>
                             </div>
-
                           )}
+
+                          {/* ✅ PDF Generation Buttons */}
                           {customerQuotations[customerId]?.length > 0 && (
-  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-    <button
-      onClick={() =>
-        downloadBase64PDF(
-          customerQuotations[customerId][0].pdfFiles.ownerPdf,
-          `${customer.name}_Owner_Quotation.pdf`
-        )
-      }
-      style={{
-        flex: 1,
-        padding: "10px",
-        background: "#3b82f6",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        fontSize: "12px",
-        fontWeight: "600",
-      }}
-    >
-      📥 Owner PDF
-    </button>
+                            <div style={{ 
+                              marginTop: "12px",
+                              padding: "12px",
+                              background: "#f0f9ff",
+                              borderRadius: "8px",
+                              border: "1px solid #bfdbfe"
+                            }}>
+                              <p style={{ 
+                                fontSize: "12px", 
+                                fontWeight: "600", 
+                                color: "#1e40af",
+                                marginBottom: "8px"
+                              }}>
+                                📄 Quotation Available
+                              </p>
+                              <div style={{ display: "flex", gap: "8px" }}>
+                                <button
+                                  onClick={() => generateAndDownloadPDF(
+                                    customerQuotations[customerId][0].quotationData,
+                                    customer,
+                                    "owner"
+                                  )}
+                                  style={{
+                                    flex: 1,
+                                    padding: "10px",
+                                    background: "#3b82f6",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  📥 Owner PDF
+                                </button>
 
-    <button
-      onClick={() =>
-        downloadBase64PDF(
-          customerQuotations[customerId][0].pdfFiles.customerPdf,
-          `${customer.name}_Customer_Quotation.pdf`
-        )
-      }
-      style={{
-        flex: 1,
-        padding: "10px",
-        background: "#8b5cf6",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        fontSize: "12px",
-        fontWeight: "600",
-      }}
-    >
-      📄 Customer PDF
-    </button>
-  </div>
-)}
-
+                                <button
+                                  onClick={() => generateAndDownloadPDF(
+                                    customerQuotations[customerId][0].quotationData,
+                                    customer,
+                                    "customer"
+                                  )}
+                                  style={{
+                                    flex: 1,
+                                    padding: "10px",
+                                    background: "#8b5cf6",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  📄 Customer PDF
+                                </button>
+                              </div>
+                              <p style={{ 
+                                fontSize: "10px", 
+                                color: "#6b7280",
+                                marginTop: "6px",
+                                textAlign: "center"
+                              }}>
+                                Created: {new Date(customerQuotations[customerId][0].createdAt).toLocaleDateString('en-IN')}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -983,30 +1063,26 @@ const downloadBase64PDF = (base64, fileName) => {
                           onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
                           onMouseLeave={(e) => e.currentTarget.style.background = "white"}
                           >
-                            {/* <td style={{ padding: "16px", fontSize: "14px", fontWeight: "600", color: "#1f2937" }}>
-                              {customer.name}
-                            </td> */}
                             <td
-  onClick={() => {
-    const isOpening = openPaymentRowId !== customerId
-    setOpenPaymentRowId(isOpening ? customerId : null)
-    setOpenAdvanceId(null)
+                              onClick={() => {
+                                const isOpening = openPaymentRowId !== customerId
+                                setOpenPaymentRowId(isOpening ? customerId : null)
+                                setOpenAdvanceId(null)
 
-    if (isOpening) {
-      loadCustomerQuotations(customerId)
-    }
-  }}
-
-  style={{
-    padding: "16px",
-    fontSize: "14px",
-    fontWeight: "600",
-    color: "#1f2937",
-    cursor: "pointer",
-  }}
->
-  {customer.name}
-</td>
+                                if (isOpening) {
+                                  loadCustomerQuotations(customerId)
+                                }
+                              }}
+                              style={{
+                                padding: "16px",
+                                fontSize: "14px",
+                                fontWeight: "600",
+                                color: "#1f2937",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {customer.name}
+                            </td>
 
                             <td style={{ padding: "16px", fontSize: "13px", color: "#6b7280" }}>
                               {customer.date || "N/A"}
@@ -1036,25 +1112,6 @@ const downloadBase64PDF = (base64, fileName) => {
                             </td>
                             <td style={{ padding: "16px", textAlign: "center" }}>
                               <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
-                                {/* <button
-                                  onClick={() => {
-                                    setOpenPaymentRowId(openPaymentRowId === customerId ? null : customerId)
-                                    setOpenAdvanceId(null)
-                                  }}
-                                  style={{
-                                    padding: "6px 12px",
-                                    background: "#3b82f6",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "11px",
-                                    fontWeight: "600",
-                                    cursor: "pointer",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {openPaymentRowId === customerId ? "Hide" : "View"}
-                                </button> */}
                                 <button
                                   onClick={() => {
                                     handleEditCustomer(customer)
@@ -1116,7 +1173,7 @@ const downloadBase64PDF = (base64, fileName) => {
                                             borderRadius: "8px",
                                             border: "1px solid #e5e7eb",
                                             display: "grid",
-                                            gridTemplateColumns: "auto 1fr auto auto",
+                                            gridTemplateColumns: "auto 1fr",
                                             gap: "16px",
                                             alignItems: "center",
                                           }}
@@ -1133,7 +1190,7 @@ const downloadBase64PDF = (base64, fileName) => {
                                               Advance #{advIdx + 1}
                                             </span>
                                           </div>
-                                          <div style={{ display: "flex", gap: "20px" }}>
+                                          <div style={{ display: "flex", gap: "20px", justifyContent: "space-between" }}>
                                             <div>
                                               <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Amount</p>
                                               <p style={{ fontSize: "15px", fontWeight: "700", color: "#1f2937" }}>
@@ -1157,7 +1214,6 @@ const downloadBase64PDF = (base64, fileName) => {
                                                     })`
                                                   : adv.paymentMode || "N/A"}
                                               </p>
-
                                             </div>
                                           </div>
                                         </div>
@@ -1194,72 +1250,69 @@ const downloadBase64PDF = (base64, fileName) => {
                                       </p>
                                     </div>
                                   )}
+
+                                  {/* ✅ PDF Generation Buttons */}
                                   {customerQuotations[customerId]?.length > 0 && (
-  <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
- <button
-  onClick={() => {
-    const invoiceIndex =
-      filteredCustomers.findIndex(c => c._id === customerId) + 1
+                                    <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                                      <button
+                                        onClick={() => {
+                                          const invoiceIndex =
+                                            filteredCustomers.findIndex(c => c._id === customerId) + 1
+                                          const invoiceNumber = `KAL ${String(invoiceIndex).padStart(3, "0")}`
+                                          generateInvoicePDF(customer, invoiceNumber)
+                                        }}
+                                        style={{
+                                          padding: "10px 16px",
+                                          background: "#16a34a",
+                                          color: "white",
+                                          border: "none",
+                                          borderRadius: "6px",
+                                          fontWeight: "600",
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        🧾 Invoice PDF
+                                      </button>
 
-    const invoiceNumber = `KAL ${String(invoiceIndex).padStart(3, "0")}`
+                                      <button
+                                        onClick={() => generateAndDownloadPDF(
+                                          customerQuotations[customerId][0].quotationData,
+                                          customer,
+                                          "owner"
+                                        )}
+                                        style={{
+                                          padding: "10px 16px",
+                                          background: "#3b82f6",
+                                          color: "white",
+                                          border: "none",
+                                          borderRadius: "6px",
+                                          fontWeight: "600",
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        📥 Owner PDF
+                                      </button>
 
-    generateInvoicePDF(customer, invoiceNumber)
-  }}
-  style={{
-    padding: "10px 16px",
-    background: "#16a34a",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    fontWeight: "600",
-  }}
->
-  🧾 Invoice PDF
-</button>
-
-
-
-    <button
-      onClick={() =>
-        downloadBase64PDF(
-          customerQuotations[customerId][0].pdfFiles.ownerPdf,
-          `${customer.name}_Owner_Quotation.pdf`
-        )
-      }
-      style={{
-        padding: "10px 16px",
-        background: "#3b82f6",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        fontWeight: "600",
-      }}
-    >
-      📥 Owner PDF
-    </button>
-
-    <button
-      onClick={() =>
-        downloadBase64PDF(
-             customerQuotations[customerId][0].pdfFiles.customerPdf,
-
-          `${customer.name}_Customer_Quotation.pdf`
-        )
-      }
-      style={{
-        padding: "10px 16px",
-        background: "#8b5cf6",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        fontWeight: "600",
-      }}
-    >
-      📄 Customer PDF
-    </button>
-  </div>
-)}
-
+                                      <button
+                                        onClick={() => generateAndDownloadPDF(
+                                          customerQuotations[customerId][0].quotationData,
+                                          customer,
+                                          "customer"
+                                        )}
+                                        style={{
+                                          padding: "10px 16px",
+                                          background: "#8b5cf6",
+                                          color: "white",
+                                          border: "none",
+                                          borderRadius: "6px",
+                                          fontWeight: "600",
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        📄 Customer PDF
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                             </tr>

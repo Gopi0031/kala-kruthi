@@ -655,25 +655,12 @@ const saveQuotationToCustomer = async () => {
   try {
     setLoading(true)
 
-    // 🆕 Pass equipmentList to PDF generators
-    const pdfWithPrices = generateQuotationPDF(
-      quotation,
-      calculateQuotationTotal,
-      true,
-      equipmentList // 🆕 Add equipment list
-    )
-
-    const pdfWithoutPrices = generateCustomerQuotationPDF(
-      quotation,
-      calculateQuotationTotal,
-      equipmentList // 🆕 Add equipment list
-    )
-
-    const ownerPdfBase64 = pdfWithPrices.output("dataurlstring").split(",")[1]
-    const customerPdfBase64 = pdfWithoutPrices.output("dataurlstring").split(",")[1]
+    // ❌ REMOVE: Don't generate PDFs for database storage
+    // const pdfWithPrices = generateQuotationPDF(...)
+    // const ownerPdfBase64 = ...
+    // const customerPdfBase64 = ...
 
     const totals = calculateQuotationTotal()
-    const fileName = `Quotation_${quotation.firstName}_${Date.now()}`
     const cleanTotal = Number(totals.total.replace(/,/g, ""))
 
     // Step 1: Get or create customer
@@ -711,11 +698,13 @@ const saveQuotationToCustomer = async () => {
         })
 
         if (!createRes.ok) {
+          const errorText = await createRes.text()
+          console.error("❌ Customer create error:", errorText)
           throw new Error("Failed to create customer")
         }
 
         const created = await createRes.json()
-        customerId = created._id || created.id
+        customerId = created.insertedId || created._id || created.id
         console.log("✅ Created new customer:", customerId)
       }
     } catch (customerError) {
@@ -729,7 +718,7 @@ const saveQuotationToCustomer = async () => {
       return
     }
 
-    // Step 2: Save quotation with PDFs
+    // Step 2: Save quotation WITHOUT PDFs (only data!)
     try {
       const quotationRes = await fetch("/api/quotations", {
         method: "POST",
@@ -737,15 +726,22 @@ const saveQuotationToCustomer = async () => {
         body: JSON.stringify({
           customerId,
           quotationData: {
-            ...quotation,
-            events: quotation.selectedEvents,
-            equipment: quotation.selectedEquipment,
+            firstName: quotation.firstName,
+            lastName: quotation.lastName,
+            customerEmail: quotation.customerEmail,
+            customerPhone: quotation.customerPhone,
+            location: quotation.location,
+            selectedEvents: quotation.selectedEvents,
+            eventDates: quotation.eventDates,
+            selectedEquipment: quotation.selectedEquipment,
+            sheetsCount: quotation.sheetsCount,
+            sheetsTypeId: quotation.sheetsTypeId,
+            sheetsPricePerSheet: quotation.sheetsPricePerSheet,
+            sheetsActualPricePerSheet: quotation.sheetsActualPricePerSheet,
+            discount: quotation.discount,
           },
-          pdfData: {
-            ownerPdfBase64,
-            customerPdfBase64,
-            fileName,
-          },
+          // ❌ REMOVE pdfData completely
+          // pdfData: null,
           totals,
         }),
       })
@@ -759,18 +755,13 @@ const saveQuotationToCustomer = async () => {
       const quotationResult = await quotationRes.json()
       console.log("✅ Quotation saved:", quotationResult)
 
-      showToast("✅ Quotation saved to customer details!", "success")
-      if (typeof refreshCustomers === "function") {
-  await refreshCustomers()
-}
+      showToast("✅ Quotation saved successfully!", "success")
       
+      if (typeof refreshCustomers === "function") {
+        await refreshCustomers()
+      }
 
-
-
-
-
-
-      // Reset form after successful save
+      // Reset form
       setTimeout(() => {
         setQuotation({
           firstName: "",
@@ -800,6 +791,7 @@ const saveQuotationToCustomer = async () => {
     setLoading(false)
   }
 }
+
 
 
   return (
