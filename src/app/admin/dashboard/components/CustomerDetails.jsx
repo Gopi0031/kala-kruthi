@@ -2,7 +2,8 @@
 'use client'
 import React, { useState } from 'react'
 import { generateInvoicePDF } from "./InvoicePDF"
-import { generateQuotationPDF, generateCustomerQuotationPDF } from './QuotationPDF'
+
+
 import { formatAmount } from './constants'
 
 export default function CustomerDetails({
@@ -29,138 +30,81 @@ export default function CustomerDetails({
   handleDeleteAllCustomers,
   loading
 }) {
-  const [customerQuotations, setCustomerQuotations] = useState({})
-  const [equipmentList, setEquipmentList] = useState([])
+ const [customerQuotations, setCustomerQuotations] = useState({})
+const loadCustomerQuotations = async (customerId) => {
+  if (!customerId) return
 
-  const loadCustomerQuotations = async (customerId) => {
-    if (!customerId) return
+  try {
+    const res = await fetch(`/api/quotations?customerId=${customerId}`)
 
-    try {
-      const res = await fetch(`/api/quotations?customerId=${customerId}`)
+    if (!res.ok) return
 
-      if (!res.ok) return
-
-      const text = await res.text()
-      if (!text) {
-        setCustomerQuotations(prev => ({
-          ...prev,
-          [customerId]: []
-        }))
-        return
-      }
-
-      const data = JSON.parse(text)
-
+    const text = await res.text()
+    if (!text) {
       setCustomerQuotations(prev => ({
         ...prev,
-        [customerId]: data
+        [customerId]: []
       }))
-
-      // Load equipment list for PDF generation
-      if (equipmentList.length === 0) {
-        const equipmentRes = await fetch('/api/quotation-pricing')
-        const equipmentData = await equipmentRes.json()
-        setEquipmentList(equipmentData.items || [])
-      }
-    } catch (err) {
-      console.error("Failed to load quotations", err)
+      return
     }
+
+    const data = JSON.parse(text)
+
+    setCustomerQuotations(prev => ({
+      ...prev,
+      [customerId]: data
+    }))
+  } catch (err) {
+    console.error("Failed to load quotations", err)
+  }
+}
+
+const [selectedCustomers, setSelectedCustomers] = useState([])
+
+  
+const downloadBase64PDF = (base64, fileName) => {
+  const link = document.createElement("a")
+  link.href = `data:application/pdf;base64,${base64}`
+  link.download = fileName
+  link.click()
+}
+const toggleCustomerSelection = (id) => {
+  setSelectedCustomers(prev =>
+    prev.includes(id)
+      ? prev.filter(cid => cid !== id)
+      : [...prev, id]
+  )
+}
+
+const clearSelection = () => setSelectedCustomers([])
+
+const handleDeleteSelectedCustomers = async () => {
+  if (selectedCustomers.length === 0) return
+
+  if (!confirm(`Delete ${selectedCustomers.length} selected customers?`)) return
+
+  for (const id of selectedCustomers) {
+    await handleDeleteCustomer(id)
   }
 
-  // ✅ Generate PDF from saved quotation data
-  const generateAndDownloadPDF = async (quotationData, customer, pdfType) => {
-    try {
-      let currentEquipmentList = equipmentList
+  clearSelection()
+}
 
-      // Load equipment list if not already loaded
-      if (!currentEquipmentList.length) {
-        const equipmentRes = await fetch('/api/quotation-pricing')
-        const equipmentData = await equipmentRes.json()
-        currentEquipmentList = equipmentData.items || []
-        setEquipmentList(currentEquipmentList)
-      }
-
-      // Calculate totals from saved quotation data
-      const calculateTotalsFromData = (qData) => {
-        let equipmentActualTotal = 0
-        let equipmentCustomerTotal = 0
-
-        if (qData.selectedEquipment) {
-          Object.keys(qData.selectedEquipment).forEach(eventType => {
-            const eventEquipment = qData.selectedEquipment[eventType] || []
-            eventEquipment.forEach(eq => {
-              if (eq.selected && eq.equipmentId && eq.equipmentId !== 'Not Selected') {
-                const quantity = eq.quantity || 1
-                equipmentActualTotal += (eq.unitActualPrice || 0) * quantity
-                equipmentCustomerTotal += (eq.unitCustomerPrice || 0) * quantity
-              }
-            })
-          })
-        }
-
-        const sheetsQuantity = parseInt(qData.sheetsCount) || 0
-        const sheetsPricePerSheet = qData.sheetsPricePerSheet || 0
-        const sheetsActualPricePerSheet = qData.sheetsActualPricePerSheet || 0
-        const sheetsCustomerTotal = sheetsQuantity * sheetsPricePerSheet
-        const sheetsActualTotal = sheetsQuantity * sheetsActualPricePerSheet
-
-        const actualGrandTotal = equipmentActualTotal + sheetsActualTotal
-        const customerGrandTotal = equipmentCustomerTotal + sheetsCustomerTotal
-
-        const discountPercent = parseFloat(qData.discount) || 0
-        const discountAmount = Math.round((customerGrandTotal * discountPercent) / 100)
-        const finalTotal = customerGrandTotal - discountAmount
-
-        const formatNumber = (num) =>
-          Math.round(num)
-            .toString()
-            .replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-
-        return {
-          equipmentActualTotal: formatNumber(equipmentActualTotal),
-          equipmentTotal: formatNumber(equipmentCustomerTotal),
-          sheetsActualTotal: formatNumber(sheetsActualTotal),
-          sheetsTotal: formatNumber(sheetsCustomerTotal),
-          actualGrandTotal: formatNumber(actualGrandTotal),
-          grandTotal: formatNumber(customerGrandTotal),
-          discountAmount: formatNumber(discountAmount),
-          discountPercent,
-          total: formatNumber(finalTotal)
-        }
-      }
-
-      const totals = calculateTotalsFromData(quotationData)
-
-      // Generate PDF based on type
-      let pdf
-      if (pdfType === "owner") {
-        pdf = generateQuotationPDF(quotationData, () => totals, true, currentEquipmentList)
-      } else {
-        pdf = generateCustomerQuotationPDF(quotationData, () => totals, currentEquipmentList)
-      }
-
-      // Download PDF
-      const fileName = `${customer.name}_${pdfType === "owner" ? "Owner" : "Customer"}_Quotation.pdf`
-      pdf.save(fileName)
-    } catch (err) {
-      console.error("Failed to generate PDF:", err)
-      alert("Failed to generate PDF. Please try again.")
-    }
-  }
 
   const filteredCustomers = customers
-    .filter((c) => {
-      if (customerFilter === "All") return true
-      return c.status === customerFilter
-    })
-    .slice()
-    .sort((a, b) => {
-      const dateA = a.date ? new Date(a.date) : new Date(0)
-      const dateB = b.date ? new Date(b.date) : new Date(0)
-      return dateB - dateA
-    })
+  .filter((c) => {
+    if (customerFilter === "All") return true
+    return c.status === customerFilter
+  })
+  .slice()
+  .sort((a, b) => {
+    const dateA = a.date ? new Date(a.date) : new Date(0)
+    const dateB = b.date ? new Date(b.date) : new Date(0)
+    return dateB - dateA
+  })
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+
 
   return (
     <div style={{
@@ -238,6 +182,25 @@ export default function CustomerDetails({
               >
                 ➕ Add Customer
               </button>
+              {selectedCustomers.length > 0 && (
+            <button
+              onClick={handleDeleteSelectedCustomers}
+              style={{
+                padding: isMobile ? "10px 20px" : "12px 24px",
+                background: "#dc2626",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "600",
+                fontSize: isMobile ? "13px" : "14px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              🗑️ Delete Selected ({selectedCustomers.length})
+            </button>
+          )}
+
               {customers.length > 0 && (
                 <button
                   onClick={handleDeleteAllCustomers}
@@ -464,37 +427,40 @@ export default function CustomerDetails({
                   Advance #{index + 1}
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "12px" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
-                      Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={adv.amount}
-                      onChange={(e) => {
-                        updateAdvance(index, "amount", e.target.value)
-                        updateAdvance(index, "isAuto", false)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "6px",
-                        fontSize: "13px",
-                        background: adv.isAuto ? "#f0fdf4" : "white",
-                      }}
-                    />
-                    {adv.isAuto && index < 3 && (
-                      <p style={{ fontSize: "10px", color: "#16a34a", marginTop: "4px" }}>
-                        Auto • 25% of Total
-                      </p>
-                    )}
-                    {!adv.isAuto && adv.amount && (
-                      <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "4px" }}>
-                        Manual amount
-                      </p>
-                    )}
-                  </div>
+                 <div>
+  <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
+    Amount (₹)
+  </label>
+
+  <input
+  type="number"
+  value={adv.amount}
+  onChange={(e) => {
+    updateAdvance(index, "amount", e.target.value)
+    updateAdvance(index, "isAuto", false)
+  }}
+  style={{
+    width: "100%",
+    padding: "8px",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    fontSize: "13px",
+    background: adv.isAuto ? "#f0fdf4" : "white",
+  }}
+/>
+
+{adv.isAuto && index < 3 && (
+  <p style={{ fontSize: "10px", color: "#16a34a", marginTop: "4px" }}>
+    Auto • 25% of Total
+  </p>
+)}
+
+{!adv.isAuto && adv.amount && (
+  <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "4px" }}>
+    Manual amount
+  </p>
+)}
+</div>
 
                   <div>
                     <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
@@ -513,75 +479,78 @@ export default function CustomerDetails({
                       }}
                     />
                   </div>
+                 <div>
+  <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
+    Payment Mode
+  </label>
 
-                  <div>
-                    <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
-                      Payment Mode
-                    </label>
-                    <select
-                      value={adv.paymentMode}
-                      onChange={(e) => updateAdvance(index, "paymentMode", e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "6px",
-                        fontSize: "13px",
-                        marginBottom: adv.paymentMode === "UPI" ? "8px" : "0",
-                      }}
-                    >
-                      <option value="">Select</option>
-                      <option value="Cash">Cash</option>
-                      <option value="UPI">UPI</option>
-                      <option value="Card">Card</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                    </select>
+  <select
+    value={adv.paymentMode}
+    onChange={(e) => updateAdvance(index, "paymentMode", e.target.value)}
+    style={{
+      width: "100%",
+      padding: "8px",
+      border: "1px solid #d1d5db",
+      borderRadius: "6px",
+      fontSize: "13px",
+      marginBottom: adv.paymentMode === "UPI" ? "8px" : "0",
+    }}
+  >
+    <option value="">Select</option>
+    <option value="Cash">Cash</option>
+    <option value="UPI">UPI</option>
+    <option value="Card">Card</option>
+    <option value="Bank Transfer">Bank Transfer</option>
+  </select>
 
-                    {/* UPI App Selection */}
-                    {adv.paymentMode === "UPI" && (
-                      <>
-                        <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
-                          UPI App
-                        </label>
-                        <select
-                          value={adv.upiApp || ""}
-                          onChange={(e) => updateAdvance(index, "upiApp", e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "13px",
-                            marginBottom: adv.upiApp === "Other" ? "6px" : "0",
-                          }}
-                        >
-                          <option value="">Select UPI App</option>
-                          <option value="GPay">GPay</option>
-                          <option value="PhonePe">PhonePe</option>
-                          <option value="Paytm">Paytm</option>
-                          <option value="Navi">Navi</option>
-                          <option value="Other">Other</option>
-                        </select>
+  {/* UPI App Selection */}
+  {adv.paymentMode === "UPI" && (
+  <>
+    <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>
+      UPI App
+    </label>
 
-                        {/* Manual UPI input when Other is selected */}
-                        {adv.upiApp === "Other" && (
-                          <input
-                            type="text"
-                            placeholder="Enter UPI app name"
-                            value={adv.otherUpi || ""}
-                            onChange={(e) => updateAdvance(index, "otherUpi", e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "8px",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "6px",
-                              fontSize: "13px",
-                            }}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
+    <select
+      value={adv.upiApp || ""}
+      onChange={(e) => updateAdvance(index, "upiApp", e.target.value)}
+      style={{
+        width: "100%",
+        padding: "8px",
+        border: "1px solid #d1d5db",
+        borderRadius: "6px",
+        fontSize: "13px",
+        marginBottom: adv.upiApp === "Other" ? "6px" : "0",
+      }}
+    >
+      <option value="">Select UPI App</option>
+      <option value="GPay">GPay</option>
+      <option value="PhonePe">PhonePe</option>
+      <option value="Paytm">Paytm</option>
+      <option value="Navi">Navi</option>
+      <option value="Other">Other</option>
+    </select>
+
+    {/* Manual UPI input when Other is selected */}
+    {adv.upiApp === "Other" && (
+      <input
+        type="text"
+        placeholder="Enter UPI app name"
+        value={adv.otherUpi || ""}
+        onChange={(e) => updateAdvance(index, "otherUpi", e.target.value)}
+        style={{
+          width: "100%",
+          padding: "8px",
+          border: "1px solid #d1d5db",
+          borderRadius: "6px",
+          fontSize: "13px",
+        }}
+      />
+    )}
+  </>
+)}
+
+</div>
+
                 </div>
               </div>
             ))}
@@ -659,7 +628,7 @@ export default function CustomerDetails({
         </div>
       )}
 
-      {/* Customer List - MOBILE & DESKTOP */}
+      {/* Customer List - MOBILE: Cards, DESKTOP: Table */}
       {!isAdding && (
         <div style={{
           marginBottom: isMobile ? "100px" : "0"
@@ -680,12 +649,18 @@ export default function CustomerDetails({
           ) : isMobile ? (
             // MOBILE: Card View
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              {filteredCustomers.map((customer) => {
-                const customerId = customer._id
-                const totalPaid = (customer.advances || []).reduce(
-                  (sum, adv) => sum + (Number(adv.amount) || 0),
-                  0
-                )
+             {filteredCustomers.map((customer) => {
+  const customerId = customer._id
+
+  const quotation = customerQuotations[customerId]?.[0]
+  const ownerPdf = quotation?.pdfFiles?.ownerPdf
+  const customerPdf = quotation?.pdfFiles?.customerPdf
+
+  const totalPaid = (customer.advances || []).reduce(
+    (sum, adv) => sum + (Number(adv.amount) || 0),
+    0
+  )
+
 
                 return (
                   <div
@@ -704,25 +679,27 @@ export default function CustomerDetails({
                       padding: "16px",
                       color: "white",
                     }}>
-                      <h3
-                        onClick={() => {
-                          const isOpening = openPaymentRowId !== customerId
-                          setOpenPaymentRowId(isOpening ? customerId : null)
-                          setOpenAdvanceId(null)
+                  <h3
+  onClick={() => {
+    const isOpening = openPaymentRowId !== customerId
+    setOpenPaymentRowId(isOpening ? customerId : null)
+    setOpenAdvanceId(null)
 
-                          if (isOpening) {
-                            loadCustomerQuotations(customerId)
-                          }
-                        }}
-                        style={{
-                          fontSize: "16px",
-                          fontWeight: "700",
-                          marginBottom: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {customer.name}
-                      </h3>
+    if (isOpening) {
+      loadCustomerQuotations(customerId)
+    }
+  }}
+
+  style={{
+    fontSize: "16px",
+    fontWeight: "700",
+    marginBottom: "4px",
+    cursor: "pointer",
+  }}
+>
+  {customer.name}
+</h3>
+
                       <p style={{ fontSize: "12px", opacity: 0.9 }}>
                         📅 {customer.date || "N/A"}
                       </p>
@@ -799,7 +776,25 @@ export default function CustomerDetails({
                       </div>
 
                       {/* Action Buttons */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                        {/* <button
+                          onClick={() => {
+                            setOpenPaymentRowId(openPaymentRowId === customerId ? null : customerId)
+                            setOpenAdvanceId(null)
+                          }}
+                          style={{
+                            padding: "10px",
+                            background: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {openPaymentRowId === customerId ? "Hide" : "View"}
+                        </button> */}
                         <button
                           onClick={() => {
                             handleEditCustomer(customer)
@@ -882,19 +877,19 @@ export default function CustomerDetails({
                                   </div>
                                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#6b7280" }}>
                                     <span>📅 {adv.date || "N/A"}</span>
-                                    <span>
-                                      💳 {adv.paymentMode}
-                                      {adv.paymentMode === "UPI" && (
-                                        <>
-                                          {" "}
-                                          (
-                                          {adv.upiApp === "Other"
-                                            ? adv.otherUpi || "Other"
-                                            : adv.upiApp}
-                                          )
-                                        </>
-                                      )}
-                                    </span>
+                                   <span>
+                                    💳 {adv.paymentMode}
+                                    {adv.paymentMode === "UPI" && (
+                                      <>
+                                        {" "}
+                                        (
+                                        {adv.upiApp === "Other"
+                                          ? adv.otherUpi || "Other"
+                                          : adv.upiApp}
+                                        )
+                                      </>
+                                    )}
+                                  </span>
                                   </div>
                                 </div>
                               ))}
@@ -929,78 +924,85 @@ export default function CustomerDetails({
                                 No advance payments recorded yet.
                               </p>
                             </div>
-                          )}
 
-                          {/* ✅ PDF Generation Buttons */}
-                          {customerQuotations[customerId]?.length > 0 && (
-                            <div style={{ 
-                              marginTop: "12px",
-                              padding: "12px",
-                              background: "#f0f9ff",
-                              borderRadius: "8px",
-                              border: "1px solid #bfdbfe"
-                            }}>
-                              <p style={{ 
-                                fontSize: "12px", 
-                                fontWeight: "600", 
-                                color: "#1e40af",
-                                marginBottom: "8px"
-                              }}>
-                                📄 Quotation Available
-                              </p>
-                              <div style={{ display: "flex", gap: "8px" }}>
-                                <button
-                                  onClick={() => generateAndDownloadPDF(
-                                    customerQuotations[customerId][0].quotationData,
-                                    customer,
-                                    "owner"
-                                  )}
-                                  style={{
-                                    flex: 1,
-                                    padding: "10px",
-                                    background: "#3b82f6",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "12px",
-                                    fontWeight: "600",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  📥 Owner PDF
-                                </button>
-
-                                <button
-                                  onClick={() => generateAndDownloadPDF(
-                                    customerQuotations[customerId][0].quotationData,
-                                    customer,
-                                    "customer"
-                                  )}
-                                  style={{
-                                    flex: 1,
-                                    padding: "10px",
-                                    background: "#8b5cf6",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "12px",
-                                    fontWeight: "600",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  📄 Customer PDF
-                                </button>
-                              </div>
-                              <p style={{ 
-                                fontSize: "10px", 
-                                color: "#6b7280",
-                                marginTop: "6px",
-                                textAlign: "center"
-                              }}>
-                                Created: {new Date(customerQuotations[customerId][0].createdAt).toLocaleDateString('en-IN')}
-                              </p>
-                            </div>
                           )}
+                        {customerQuotations[customerId]?.length > 0 && (
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+      marginTop: "12px",
+    }}
+  >
+    {/* Invoice PDF */}
+    <button
+      onClick={() => {
+        const invoiceIndex =
+          filteredCustomers.findIndex(c => c._id === customerId) + 1
+
+        const invoiceNumber = `KAL ${String(invoiceIndex).padStart(3, "0")}`
+        generateInvoicePDF(customer, invoiceNumber)
+      }}
+      style={{
+        padding: "10px",
+        background: "#16a34a",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        fontSize: "12px",
+        fontWeight: "600",
+        cursor: "pointer",
+      }}
+    >
+      🧾 Invoice PDF
+    </button>
+
+    {/* Quotation PDFs */}
+    <div style={{ display: "flex", gap: "8px" }}>
+      <button
+        disabled={!ownerPdf}
+        onClick={() => ownerPdf && downloadBase64PDF(ownerPdf, `${customer.name}_Owner_Quotation.pdf`)}
+        style={{
+          flex: 1,
+          padding: "10px",
+          background: ownerPdf ? "#3b82f6" : "#9ca3af",
+          color: "white",
+          border: "none",
+          borderRadius: "6px",
+          fontSize: "12px",
+          fontWeight: "600",
+          cursor: ownerPdf ? "pointer" : "not-allowed",
+        }}
+      >
+        📥 Owner PDF
+      </button>
+
+      <button
+        disabled={!customerPdf}
+        onClick={() =>
+          customerPdf &&
+          downloadBase64PDF(customerPdf, `${customer.name}_Customer_Quotation.pdf`)
+        }
+        style={{
+          flex: 1,
+          padding: "10px",
+          background: customerPdf ? "#8b5cf6" : "#9ca3af",
+          color: "white",
+          border: "none",
+          borderRadius: "6px",
+          fontSize: "12px",
+          fontWeight: "600",
+          cursor: customerPdf ? "pointer" : "not-allowed",
+        }}
+      >
+        📄 Customer PDF
+      </button>
+    </div>
+  </div>
+)}
+
+
                         </div>
                       )}
                     </div>
@@ -1023,6 +1025,17 @@ export default function CustomerDetails({
                 }}>
                   <thead>
                     <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
+                      <th style={{
+  padding: "14px 16px",
+  textAlign: "center",
+  fontSize: "12px",
+  fontWeight: "700",
+  color: "#4b5563",
+  textTransform: "uppercase",
+}}>
+  Select
+</th>
+
                       <th style={{ padding: "14px 16px", textAlign: "left", fontSize: "12px", fontWeight: "700", color: "#4b5563", textTransform: "uppercase", whiteSpace: "nowrap" }}>
                         Name
                       </th>
@@ -1047,12 +1060,18 @@ export default function CustomerDetails({
                     </tr>
                   </thead>
                   <tbody>
+
                     {filteredCustomers.map((customer) => {
-                      const customerId = customer._id
-                      const totalPaid = (customer.advances || []).reduce(
-                        (sum, adv) => sum + (Number(adv.amount) || 0),
-                        0
-                      )
+  const customerId = customer._id
+
+  const quotation = customerQuotations[customerId]?.[0]
+  const ownerPdf = quotation?.pdfFiles?.ownerPdf
+  const customerPdf = quotation?.pdfFiles?.customerPdf
+
+  const totalPaid = (customer.advances || []).reduce(
+    (sum, adv) => sum + (Number(adv.amount) || 0),
+    0
+  )
 
                       return (
                         <React.Fragment key={customerId}>
@@ -1063,26 +1082,39 @@ export default function CustomerDetails({
                           onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
                           onMouseLeave={(e) => e.currentTarget.style.background = "white"}
                           >
-                            <td
-                              onClick={() => {
-                                const isOpening = openPaymentRowId !== customerId
-                                setOpenPaymentRowId(isOpening ? customerId : null)
-                                setOpenAdvanceId(null)
+                            <td style={{ padding: "16px", textAlign: "center" }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedCustomers.includes(customerId)}
+                          onChange={() => toggleCustomerSelection(customerId)}
+                        />
+                      </td>
 
-                                if (isOpening) {
-                                  loadCustomerQuotations(customerId)
-                                }
-                              }}
-                              style={{
-                                padding: "16px",
-                                fontSize: "14px",
-                                fontWeight: "600",
-                                color: "#1f2937",
-                                cursor: "pointer",
-                              }}
-                            >
+                            {/* <td style={{ padding: "16px", fontSize: "14px", fontWeight: "600", color: "#1f2937" }}>
                               {customer.name}
-                            </td>
+                            </td> */}
+                            <td
+  onClick={() => {
+    const isOpening = openPaymentRowId !== customerId
+    setOpenPaymentRowId(isOpening ? customerId : null)
+    setOpenAdvanceId(null)
+
+    if (isOpening) {
+      loadCustomerQuotations(customerId)
+    }
+  }}
+
+  style={{
+    padding: "16px",
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#1f2937",
+    cursor: "pointer",
+  }}
+>
+  {customer.name}
+  
+</td>
 
                             <td style={{ padding: "16px", fontSize: "13px", color: "#6b7280" }}>
                               {customer.date || "N/A"}
@@ -1112,6 +1144,25 @@ export default function CustomerDetails({
                             </td>
                             <td style={{ padding: "16px", textAlign: "center" }}>
                               <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
+                                {/* <button
+                                  onClick={() => {
+                                    setOpenPaymentRowId(openPaymentRowId === customerId ? null : customerId)
+                                    setOpenAdvanceId(null)
+                                  }}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#3b82f6",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    fontSize: "11px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {openPaymentRowId === customerId ? "Hide" : "View"}
+                                </button> */}
                                 <button
                                   onClick={() => {
                                     handleEditCustomer(customer)
@@ -1156,7 +1207,7 @@ export default function CustomerDetails({
                           {/* Expandable Payment Details */}
                           {openPaymentRowId === customerId && (
                             <tr>
-                              <td colSpan={7} style={{ padding: 0, background: "#f9fafb" }}>
+                              <td colSpan={8} style={{ padding: 0, background: "#f9fafb" }}>
                                 <div style={{ padding: "20px", borderTop: "2px solid #e5e7eb" }}>
                                   <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#1f2937", marginBottom: "16px" }}>
                                     💰 Payment Details
@@ -1173,7 +1224,7 @@ export default function CustomerDetails({
                                             borderRadius: "8px",
                                             border: "1px solid #e5e7eb",
                                             display: "grid",
-                                            gridTemplateColumns: "auto 1fr",
+                                            gridTemplateColumns: "auto 1fr auto auto",
                                             gap: "16px",
                                             alignItems: "center",
                                           }}
@@ -1190,7 +1241,7 @@ export default function CustomerDetails({
                                               Advance #{advIdx + 1}
                                             </span>
                                           </div>
-                                          <div style={{ display: "flex", gap: "20px", justifyContent: "space-between" }}>
+                                          <div style={{ display: "flex", gap: "20px" }}>
                                             <div>
                                               <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Amount</p>
                                               <p style={{ fontSize: "15px", fontWeight: "700", color: "#1f2937" }}>
@@ -1214,6 +1265,7 @@ export default function CustomerDetails({
                                                     })`
                                                   : adv.paymentMode || "N/A"}
                                               </p>
+
                                             </div>
                                           </div>
                                         </div>
@@ -1250,69 +1302,77 @@ export default function CustomerDetails({
                                       </p>
                                     </div>
                                   )}
-
-                                  {/* ✅ PDF Generation Buttons */}
                                   {customerQuotations[customerId]?.length > 0 && (
-                                    <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
-                                      <button
-                                        onClick={() => {
-                                          const invoiceIndex =
-                                            filteredCustomers.findIndex(c => c._id === customerId) + 1
-                                          const invoiceNumber = `KAL ${String(invoiceIndex).padStart(3, "0")}`
-                                          generateInvoicePDF(customer, invoiceNumber)
-                                        }}
-                                        style={{
-                                          padding: "10px 16px",
-                                          background: "#16a34a",
-                                          color: "white",
-                                          border: "none",
-                                          borderRadius: "6px",
-                                          fontWeight: "600",
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        🧾 Invoice PDF
-                                      </button>
+  <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+ <button
+  onClick={() => {
+    const invoiceIndex =
+      filteredCustomers.findIndex(c => c._id === customerId) + 1
 
-                                      <button
-                                        onClick={() => generateAndDownloadPDF(
-                                          customerQuotations[customerId][0].quotationData,
-                                          customer,
-                                          "owner"
-                                        )}
-                                        style={{
-                                          padding: "10px 16px",
-                                          background: "#3b82f6",
-                                          color: "white",
-                                          border: "none",
-                                          borderRadius: "6px",
-                                          fontWeight: "600",
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        📥 Owner PDF
-                                      </button>
+    const invoiceNumber = `KAL ${String(invoiceIndex).padStart(3, "0")}`
 
-                                      <button
-                                        onClick={() => generateAndDownloadPDF(
-                                          customerQuotations[customerId][0].quotationData,
-                                          customer,
-                                          "customer"
-                                        )}
-                                        style={{
-                                          padding: "10px 16px",
-                                          background: "#8b5cf6",
-                                          color: "white",
-                                          border: "none",
-                                          borderRadius: "6px",
-                                          fontWeight: "600",
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        📄 Customer PDF
-                                      </button>
-                                    </div>
-                                  )}
+    generateInvoicePDF(customer, invoiceNumber)
+  }}
+  style={{
+    padding: "10px 16px",
+    background: "#16a34a",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontWeight: "600",
+  }}
+>
+  🧾 Invoice PDF
+</button>
+
+
+
+   <button
+  disabled={!ownerPdf}
+  onClick={() => {
+    if (!ownerPdf) return
+    downloadBase64PDF(ownerPdf, `${customer.name}_Owner_Quotation.pdf`)
+  }}
+  style={{
+    flex: 1,
+    padding: "10px",
+    background: ownerPdf ? "#3b82f6" : "#9ca3af",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "12px",
+    fontWeight: "600",
+    cursor: ownerPdf ? "pointer" : "not-allowed",
+  }}
+>
+  📥 Owner PDF
+</button>
+
+
+   <button
+  disabled={!customerPdf}
+  onClick={() => {
+    if (!customerPdf) return
+    downloadBase64PDF(customerPdf, `${customer.name}_Customer_Quotation.pdf`)
+  }}
+  style={{
+    flex: 1,
+    padding: "10px",
+    background: customerPdf ? "#8b5cf6" : "#9ca3af",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "12px",
+    fontWeight: "600",
+    cursor: customerPdf ? "pointer" : "not-allowed",
+  }}
+>
+  📄 Customer PDF
+</button>
+
+  </div>
+)}
+
                                 </div>
                               </td>
                             </tr>
