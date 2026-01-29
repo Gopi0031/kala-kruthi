@@ -80,7 +80,6 @@ export async function GET(request) {
 }
 
 // POST new quotation (from Quotation.jsx)
-// POST new quotation (from Quotation.jsx)
 export async function POST(request) {
   try {
     const client = await clientPromise;
@@ -91,7 +90,7 @@ export async function POST(request) {
     const {
       customerId,
       quotationData,
-      // ❌ REMOVE pdfData
+      pdfData, // { ownerPdfBase64, customerPdfBase64, fileName }
       totals
     } = body;
     
@@ -116,7 +115,7 @@ export async function POST(request) {
       )
     }
 
-    // ✅ Build quotation record WITHOUT PDFs
+    // Build quotation record
     const quotationRecord = {
       customerId: customerObjectId,
       quotationData: {
@@ -124,8 +123,12 @@ export async function POST(request) {
         createdAt: new Date()
       },
       totals: totals || {},
-      // ❌ REMOVE pdfFiles completely
-      // pdfFiles: null,
+      pdfFiles: pdfData ? {
+        ownerPdf: pdfData.ownerPdfBase64,
+        customerPdf: pdfData.customerPdfBase64,
+        fileName: pdfData.fileName || `Quotation_${Date.now()}`,
+        savedAt: new Date(),
+      } : null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -149,7 +152,6 @@ export async function POST(request) {
     }, { status: 500 });
   }
 }
-
 
 // PUT update quotation
 export async function PUT(request) {

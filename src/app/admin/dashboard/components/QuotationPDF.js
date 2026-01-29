@@ -74,16 +74,18 @@ export const generateQuotationPDF = (
 
           const modelName = getEquipmentModelName(eq.equipmentId, equipmentList)
  
-          eventItems.push({
-           name: `${eq.category} - ${eq.timeSlot || "N/A"}${
-  modelName ? `\n${modelName} × ${eq.quantity || 1}` : ""
-}`,
-            quantity: quantity,
-            unitActualPrice: unitActualPrice,
-            unitCustomerPrice: unitCustomerPrice,
-            totalActual: totalActual,
-            totalCustomer: totalCustomer,
-          })
+         eventItems.push({
+  name: `${eq.category} - ${eq.timeSlot || "N/A"}${
+    modelName ? `\n${modelName} × ${eq.quantity || 1}` : ""
+  }`,
+  cameramanName: eq.cameramanName || "", // ✅ ADD
+  quantity,
+  unitActualPrice,
+  unitCustomerPrice,
+  totalActual,
+  totalCustomer,
+})
+
         }
       })
 
@@ -237,9 +239,10 @@ autoTable(doc, {
     contentY += 8
 
     // ✅ MODIFIED: Customer PDF - No Qty column, Owner PDF - With Qty column
-    const tableHeaders = showPrices
-      ? [["Item", "Qty", "Actual (Rs)", "Customer (Rs)"]]
-      : [["Item", "Qty"]]
+   const tableHeaders = showPrices
+  ? [["Item", "Cameraman", "Qty", "Actual (Rs)", "Customer (Rs)"]]
+  : [["Item", "Qty"]]
+
 
     // ✅ MODIFIED: Customer PDF table body (NO QTY column, just total price)
     const tableBody = eventItems.map((item) => {
@@ -248,6 +251,7 @@ autoTable(doc, {
     // ✅ OWNER PDF: Full details (unchanged)
     return [
       item.name,
+        item.cameramanName || "—", // ✅ ADD
       item.quantity.toString(),
       `Rs ${item.unitActualPrice.toLocaleString("en-IN")} × ${item.quantity} = Rs ${item.totalActual.toLocaleString("en-IN")}`,
       `Rs ${item.unitCustomerPrice.toLocaleString("en-IN")} × ${item.quantity} = Rs ${item.totalCustomer.toLocaleString("en-IN")}`,
@@ -278,17 +282,18 @@ autoTable(doc, {
         cellPadding: 2.5,
       },
       columnStyles: showPrices
-        ? {
-            0: { cellWidth: 60, halign: "left" },
-            1: { cellWidth: 15, halign: "center" },
-            2: { cellWidth: 50, halign: "right" },
-            3: { cellWidth: 50, halign: "right" },
-          }
-        : {
-            // ✅ CUSTOMER PDF: 2 columns - Description(85) + Qty(20)
-        0: { cellWidth: 85, halign: "left" },
-        1: { cellWidth: 20, halign: "center" },
-          },
+  ? {
+      0: { cellWidth: 60, halign: "left" },   // Item
+      1: { cellWidth: 30, halign: "center" }, // Cameraman
+      2: { cellWidth: 12, halign: "center" }, // Qty
+      3: { cellWidth: 38, halign: "right" },  // Actual
+      4: { cellWidth: 38, halign: "right" },  // Customer
+    }
+  : {
+      0: { cellWidth: 85, halign: "left" },
+      1: { cellWidth: 20, halign: "center" },
+    },
+
       margin: { left: SAFE_MARGIN, right: SAFE_MARGIN },
       // pageBreak: "avoid",
     })
@@ -358,17 +363,19 @@ autoTable(doc, {
         fontSize: 7.5,
         cellPadding: 2.5,
       },
-      columnStyles: showPrices
-    ? {
-        0: { cellWidth: 60, halign: "left" },
-        1: { cellWidth: 15, halign: "center" },
-        2: { cellWidth: 50, halign: "right" },
-        3: { cellWidth: 50, halign: "right" },
-      }
-    : {
-        0: { cellWidth: 85, halign: "left" },
-        1: { cellWidth: 20, halign: "center" },
-      },
+     columnStyles: showPrices
+  ? {
+      0: { cellWidth: 60, halign: "left" },   // Item
+      1: { cellWidth: 30, halign: "center" }, // Cameraman
+      2: { cellWidth: 12, halign: "center" }, // Qty
+      3: { cellWidth: 38, halign: "right" },  // Actual
+      4: { cellWidth: 38, halign: "right" },  // Customer
+    }
+  : {
+      0: { cellWidth: 85, halign: "left" },
+      1: { cellWidth: 20, halign: "center" },
+    },
+
       margin: { left: SAFE_MARGIN, right: SAFE_MARGIN },
       pageBreak: "avoid",
     })
@@ -588,11 +595,13 @@ autoTable(doc, {
   },
 
   columnStyles: {
-    0: { cellWidth: 30 },
-    1: { cellWidth: 45 },
-    2: { cellWidth: 45 },
-    3: { cellWidth: 60 },
-  },
+  0: { cellWidth: 30, halign: "center" },   // Event
+  1: { cellWidth: 45, halign: "center" }, // Schedule
+  2: { cellWidth: 30, halign: "center" }, // Event Location
+  3: { cellWidth: 75, halign: "center" },   // Services / Equipment
+},
+
+
 
   margin: { left: SAFE_MARGIN, right: SAFE_MARGIN },
 })

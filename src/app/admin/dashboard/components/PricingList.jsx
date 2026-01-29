@@ -29,6 +29,7 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
   const [items, setItems] = useState([])
 
   const [newItem, setNewItem] = useState({
+    cameramanName: '',   // ✅ ADD
     category: 'Traditional Photo Camera',
     brand: 'Sony',
     model: '',
@@ -70,12 +71,20 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
       
       if (data.items && data.items.length > 0) {
         setItems(data.items)
+        const normalizedItems = data.items.map(item => ({
+  cameramanName: '',          // ✅ FORCE DEFAULT
+  ...item
+}))
+
+setItems(normalizedItems)
+
         console.log('✅ Loaded items from DB:', data.items.length)
         showToast('✅ Items loaded successfully', 'success')
       } else {
         const defaultItems = [
           { 
             id: 1, 
+                cameramanName: '',     // ✅ ADD THIS
             category: 'Traditional Photo Camera', 
             brand: 'Sony', 
             model: '7R III', 
@@ -86,6 +95,8 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
           },
           { 
             id: 2, 
+                cameramanName: '',     // ✅ ADD THIS
+
             category: 'Candid Video Camera', 
             brand: 'Sony', 
             model: 'FX3', 
@@ -157,32 +168,41 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
 
     setItems(prev => [...prev, itemToAdd])
     setNewItem({ 
-      category: 'Traditional Photo Camera', 
-      brand: 'Sony', 
-      model: '', 
-      actualPriceHalfDay: 0, 
-      customerPriceHalfDay: 0,
-      actualPriceFullDay: 0,
-      customerPriceFullDay: 0,
-      quality: 'Premium'
-    })
+  cameramanName: '',          // ✅ ADD THIS
+  category: 'Traditional Photo Camera', 
+  brand: 'Sony', 
+  model: '', 
+  actualPriceHalfDay: 0, 
+  customerPriceHalfDay: 0,
+  actualPriceFullDay: 0,
+  customerPriceFullDay: 0,
+  quality: 'Premium'
+})
+
     showToast('✅ Item added successfully!', 'success')
   }
 
   const saveItemsToDb = async () => {
-    try {
-      const response = await fetch('/api/quotation-pricing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items })
-      })
-      if (!response.ok) throw new Error('Save failed')
-      showToast('✅ Items saved to database!', 'success')
-    } catch (error) {
-      console.error('Save error:', error)
-      showToast('❌ Failed to save items', 'error')
-    }
+  try {
+    const response = await fetch('/api/quotation-pricing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    })
+
+    if (!response.ok) throw new Error('Save failed')
+
+    showToast('✅ Items saved to database!', 'success')
+
+    // ✅ ADD THIS LINE (VERY IMPORTANT)
+    window.dispatchEvent(new Event("pricing-updated"))
+
+  } catch (error) {
+    console.error('Save error:', error)
+    showToast('❌ Failed to save items', 'error')
   }
+}
+
 
   const submitQuotationPrices = () => {
     const newSubmittedPrices = {}
@@ -600,8 +620,27 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
 
           <div style={{ padding: '24px', background: '#f0fdf4', borderBottom: '2px solid #10b981' }}>
             <div style={{ display: 'grid', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+              <div style={{ display: 'grid',gridTemplateColumns: '1fr 1fr 1fr 1.2fr', gap: '12px' }}>
+                {/* CAMERAMAN – ADD HERE (LEFT SIDE) */}
+<div>
+  <label className="mobile-label">Cameraman *</label>
+  <input
+    type="text"
+    placeholder="Cameraman name"
+    value={newItem.cameramanName || ""}
+    onChange={(e) =>
+      setNewItem(prev => ({
+        ...prev,
+        cameramanName: e.target.value
+      }))
+    }
+    style={formInputStyle}
+  />
+</div>
+
                 <div>
+
+
                   <label className="mobile-label">Category *</label>
                   <select
                     value={newItem.category}
@@ -854,37 +893,66 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
             </div>
           </div>
           
-          <div className="grid-header" style={{
-            display: 'grid', 
-            gridTemplateColumns: '0.7fr 0.8fr 1.2fr 0.9fr 0.9fr 0.9fr 0.9fr 80px', 
-            gap: '10px',
-            padding: '16px 24px', 
-            background: '#f8fafc', 
-            fontWeight: '600', 
-            color: '#1e293b', 
-            fontSize: '12px',
-            borderBottom: '2px solid #e2e8f0'
-          }}>
-            <div>Category</div>
-            <div>Brand</div>
-            <div>Model</div>
-            <div style={{ textAlign: 'center' }}>Actual Rs.<br/>(Half/Per)</div>
-            <div style={{ textAlign: 'center' }}>Customer Rs.<br/>(Half/Per)</div>
-            <div style={{ textAlign: 'center' }}>Actual Rs.<br/>(Full)</div>
-            <div style={{ textAlign: 'center' }}>Customer Rs.<br/>(Full)</div>
-            <div style={{ textAlign: 'center' }}>Delete</div>
-          </div>
+         <div
+  className="grid-header"
+  style={{
+    display: 'grid',
+    gridTemplateColumns:
+      '1fr 1fr 1fr 1.2fr 0.9fr 0.9fr 0.9fr 0.9fr 80px',
+    gap: '10px',
+    padding: '16px 24px',
+    background: '#f8fafc',
+    fontWeight: '600',
+    fontSize: '12px',
+    borderBottom: '2px solid #e2e8f0',
+  }}
+>
+  <div>Cameraman</div>
+  <div>Category</div>
+  <div>Brand</div>
+  <div>Model</div>
+  <div style={{ textAlign: 'center' }}>Actual (Half)</div>
+  <div style={{ textAlign: 'center' }}>Customer (Half)</div>
+  <div style={{ textAlign: 'center' }}>Actual (Full)</div>
+  <div style={{ textAlign: 'center' }}>Customer (Full)</div>
+  <div style={{ textAlign: 'center' }}>Delete</div>
+</div>
+
 
           <div style={{ padding: '16px 24px 24px' }}>
             {items.map((item) => (
-              <div key={item.id} className="grid-row" style={{
-                display: 'grid', 
-                gridTemplateColumns: '0.7fr 0.8fr 1.2fr 0.9fr 0.9fr 0.9fr 0.9fr 80px', 
-                gap: '10px', 
-                alignItems: 'center',
-                padding: '12px 0', 
-                borderBottom: '1px solid #f1f5f9'
-              }}>
+              <div
+  className="grid-row"
+  style={{
+    display: 'grid',
+    gridTemplateColumns:
+      '1fr 1fr 1fr 1.2fr 0.9fr 0.9fr 0.9fr 0.9fr 80px',
+    gap: '10px',
+    alignItems: 'center',
+    padding: '12px 0',
+    borderBottom: '1px solid #f1f5f9',
+  }}
+>
+
+                <div>
+  <label className="mobile-label">Cameraman</label>
+  <input
+    type="text"
+    value={item.cameramanName || ""}
+    placeholder="Cameraman name"
+    onChange={(e) =>
+      updateItem(item.id, "cameramanName", e.target.value)
+    }
+    style={{
+      width: "100%",
+      padding: "6px",
+      border: "1px solid #d1d5db",
+      borderRadius: "6px",
+      fontSize: "13px",
+    }}
+  />
+</div>
+
                <div>
   <label className="mobile-label">Category</label>
 
@@ -1115,7 +1183,7 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
                 onChange={(e) => handleB2bInputChange('phoneNumber', e.target.value)}
                 style={formInputStyle} />
 
-              <div style={{ 
+              {/* <div style={{ 
                 padding: '20px', background: '#f8fafc', borderRadius: '10px', 
                 border: '1px solid #e2e8f0'
               }}>
@@ -1166,7 +1234,7 @@ export default function PricingList({ quotationPricing, setQuotationPricing }) {
                     </div>
                   )
                 })}
-              </div>
+              </div> */}
 
               <input placeholder="📍 Location" 
                 value={b2bForm.location}

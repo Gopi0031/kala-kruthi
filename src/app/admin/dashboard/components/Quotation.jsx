@@ -27,9 +27,19 @@ export default function Quotation({
   const [equipmentList, setEquipmentList] = useState([])
   const [loadingEquipment, setLoadingEquipment] = useState(true)
 
-  useEffect(() => {
-    loadEquipmentFromPricingList()
-  }, [])
+ useEffect(() => {
+  loadEquipmentFromPricingList()
+
+  // ✅ LISTEN FOR PRICING UPDATES
+  const reload = () => loadEquipmentFromPricingList()
+
+  window.addEventListener("pricing-updated", reload)
+
+  return () => {
+    window.removeEventListener("pricing-updated", reload)
+  }
+}, [])
+
 
   const loadEquipmentFromPricingList = async () => {
     try {
@@ -143,6 +153,7 @@ export default function Quotation({
         const initialEquipment = categories.map((category, idx) => ({
           id: `${eventType}-${idx}`,
           category: category,
+            cameramanName: "",   // ✅ ADD THIS
           selected: false,
           equipmentId: 'Not Selected',
           timeSlot: 'Not Selected',
@@ -655,12 +666,25 @@ const saveQuotationToCustomer = async () => {
   try {
     setLoading(true)
 
-    // ❌ REMOVE: Don't generate PDFs for database storage
-    // const pdfWithPrices = generateQuotationPDF(...)
-    // const ownerPdfBase64 = ...
-    // const customerPdfBase64 = ...
+    // 🆕 Pass equipmentList to PDF generators
+    const pdfWithPrices = generateQuotationPDF(
+      quotation,
+      calculateQuotationTotal,
+      true,
+      equipmentList // 🆕 Add equipment list
+    )
+
+    const pdfWithoutPrices = generateCustomerQuotationPDF(
+      quotation,
+      calculateQuotationTotal,
+      equipmentList // 🆕 Add equipment list
+    )
+
+    const ownerPdfBase64 = pdfWithPrices.output("dataurlstring").split(",")[1]
+    const customerPdfBase64 = pdfWithoutPrices.output("dataurlstring").split(",")[1]
 
     const totals = calculateQuotationTotal()
+    const fileName = `Quotation_${quotation.firstName}_${Date.now()}`
     const cleanTotal = Number(totals.total.replace(/,/g, ""))
 
     // Step 1: Get or create customer
@@ -698,13 +722,11 @@ const saveQuotationToCustomer = async () => {
         })
 
         if (!createRes.ok) {
-          const errorText = await createRes.text()
-          console.error("❌ Customer create error:", errorText)
           throw new Error("Failed to create customer")
         }
 
         const created = await createRes.json()
-        customerId = created.insertedId || created._id || created.id
+        customerId = created._id || created.id
         console.log("✅ Created new customer:", customerId)
       }
     } catch (customerError) {
@@ -718,7 +740,7 @@ const saveQuotationToCustomer = async () => {
       return
     }
 
-    // Step 2: Save quotation WITHOUT PDFs (only data!)
+    // Step 2: Save quotation with PDFs
     try {
       const quotationRes = await fetch("/api/quotations", {
         method: "POST",
@@ -726,22 +748,15 @@ const saveQuotationToCustomer = async () => {
         body: JSON.stringify({
           customerId,
           quotationData: {
-            firstName: quotation.firstName,
-            lastName: quotation.lastName,
-            customerEmail: quotation.customerEmail,
-            customerPhone: quotation.customerPhone,
-            location: quotation.location,
-            selectedEvents: quotation.selectedEvents,
-            eventDates: quotation.eventDates,
-            selectedEquipment: quotation.selectedEquipment,
-            sheetsCount: quotation.sheetsCount,
-            sheetsTypeId: quotation.sheetsTypeId,
-            sheetsPricePerSheet: quotation.sheetsPricePerSheet,
-            sheetsActualPricePerSheet: quotation.sheetsActualPricePerSheet,
-            discount: quotation.discount,
+            ...quotation,
+            events: quotation.selectedEvents,
+            equipment: quotation.selectedEquipment,
           },
-          // ❌ REMOVE pdfData completely
-          // pdfData: null,
+          pdfData: {
+            ownerPdfBase64,
+            customerPdfBase64,
+            fileName,
+          },
           totals,
         }),
       })
@@ -755,13 +770,18 @@ const saveQuotationToCustomer = async () => {
       const quotationResult = await quotationRes.json()
       console.log("✅ Quotation saved:", quotationResult)
 
-      showToast("✅ Quotation saved successfully!", "success")
-      
+      showToast("✅ Quotation saved to customer details!", "success")
       if (typeof refreshCustomers === "function") {
-        await refreshCustomers()
-      }
+  await refreshCustomers()
+}
+      
 
-      // Reset form
+
+
+
+
+
+      // Reset form after successful save
       setTimeout(() => {
         setQuotation({
           firstName: "",
@@ -791,7 +811,6 @@ const saveQuotationToCustomer = async () => {
     setLoading(false)
   }
 }
-
 
 
   return (
@@ -824,7 +843,15 @@ const saveQuotationToCustomer = async () => {
 
         .requirement-row {
           display: grid;
-          grid-template-columns: 30px 150px 180px 110px 70px 110px 110px;
+          grid-template-columns: 
+    30px      /* checkbox */
+    150px     /* Cameraman */
+    150px     /* Category */
+    180px     /* Equipment */
+    110px     /* Time Slot */
+    70px      /* Qty */
+    110px     /* Actual */
+    110px;    /* Customer */
           gap: 12px;
           align-items: center;
           padding: 12px 0;
@@ -833,7 +860,15 @@ const saveQuotationToCustomer = async () => {
 
         .equipment-header {
           display: grid;
-          grid-template-columns: 30px 150px 180px 110px 70px 110px 110px;
+          grid-template-columns: 
+    30px
+    150px
+    150px
+    180px
+    110px
+    70px
+    110px
+    110px;
           gap: 12px;
           padding: 12px 0;
           border-bottom: 2px solid #e5e7eb;
@@ -1236,6 +1271,7 @@ const saveQuotationToCustomer = async () => {
                       {/* Desktop Header */}
                       <div className="equipment-header">
                         <div></div>
+                        <div>Cameraman</div> {/* ✅ ADD HERE */}
                         <div>Category</div>
                         <div>Equipment</div>
                         <div>Time Slot</div>
@@ -1263,6 +1299,50 @@ const saveQuotationToCustomer = async () => {
                                 accentColor: "#10b981"
                               }}
                             />
+
+                            <div>
+                      <label className="mobile-label">Cameraman</label>
+                      <select
+                        value={equipment.cameramanName || ""}
+                        disabled={!equipment.selected}
+                        onChange={(e) =>
+                          setQuotation(prev => {
+                            const updated = [...prev.selectedEquipment[activeRequirementTab]]
+                            updated[idx] = {
+                              ...updated[idx],
+                              cameramanName: e.target.value
+                            }
+                            return {
+                              ...prev,
+                              selectedEquipment: {
+                                ...prev.selectedEquipment,
+                                [activeRequirementTab]: updated
+                              }
+                            }
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "8px",
+                          border: "2px solid #0ea5e9",
+                          borderRadius: "6px",
+                          background: equipment.selected ? "#ecfeff" : "#f3f4f6",
+                          fontWeight: "600",
+                          cursor: equipment.selected ? "pointer" : "not-allowed",
+                          fontSize: "13px",
+                        }}
+                      >
+                        <option value="">Select Cameraman</option>
+                        {[...new Set(equipmentList.map(i => i.cameramanName).filter(Boolean))].map(
+                          (name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+
 
                             <div>
                               <label className="mobile-label">Category</label>
