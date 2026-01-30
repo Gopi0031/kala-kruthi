@@ -771,6 +771,30 @@ const saveQuotationToCustomer = async () => {
       console.log("✅ Quotation saved:", quotationResult)
 
       showToast("✅ Quotation saved to customer details!", "success")
+
+      // ================================
+// 📅 SAVE EVENTS TO CALENDAR
+// ================================
+for (const eventType of quotation.selectedEvents) {
+  const eventDate = quotation.eventDates?.[eventType]?.date
+  if (!eventDate) continue
+
+ await fetch("/api/calendar-events", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    title: `${eventType} - ${quotation.firstName}`,
+    date: eventDate,                    // keep for reference
+    start: `${eventDate}T00:00:00`,      // ✅ REQUIRED by FullCalendar
+    timeSlot: quotation.eventDates[eventType]?.timeSlot || "",
+    location: quotation.eventDates[eventType]?.location || "",
+    customerName: `${quotation.firstName} ${quotation.lastName || ""}`,
+    customerPhone: quotation.customerPhone,
+    status: "Pending",
+  }),
+})
+}
+
       if (typeof refreshCustomers === "function") {
   await refreshCustomers()
 }
@@ -811,6 +835,46 @@ const saveQuotationToCustomer = async () => {
     setLoading(false)
   }
 }
+const saveQuotationDatesToCalendar = async () => {
+  if (!quotation.selectedEvents.length) {
+    showToast("No events selected", "error")
+    return
+  }
+
+  try {
+    setLoading(true)
+
+    for (const eventType of quotation.selectedEvents) {
+      const eventDateObj = quotation.eventDates[eventType]
+      if (!eventDateObj?.date) continue
+
+      await fetch("/api/calendar-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: eventType,
+          date: eventDateObj.date,            // ✅ REQUIRED
+          timeSlot: eventDateObj.timeSlot || "",
+          location: eventDateObj.location || "",
+          customerName: quotation.firstName || "",
+          customerPhone: quotation.customerPhone || "",
+          status: "Pending",
+        }),
+      })
+    }
+
+    showToast("📅 Events saved to calendar!", "success")
+
+  } catch (error) {
+    console.error("Calendar save error:", error)
+    showToast("Failed to save events to calendar", "error")
+  } finally {
+    setLoading(false)
+  }
+}
+
+
+
 
 
   return (
@@ -1710,6 +1774,27 @@ const saveQuotationToCustomer = async () => {
             borderRadius: "12px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
           }}>
+
+            <button
+  onClick={saveQuotationDatesToCalendar}
+  disabled={loading}
+  style={{
+    flex: 1,
+    padding: "14px 24px",
+    background: loading ? "#d1d5db" : "#0ea5e9",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "700",
+    fontSize: "15px",
+    cursor: loading ? "not-allowed" : "pointer",
+    minWidth: "200px",
+    marginBottom: "12px"
+  }}
+>
+  📅 Save Events to Calendar
+</button>
+
             <button
   onClick={saveQuotationToCustomer}
   disabled={loading}

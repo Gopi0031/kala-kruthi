@@ -1,12 +1,24 @@
 'use client'
 import React, { useEffect, useRef } from 'react'
+import { useRouter } from "next/navigation"
 import Chart from 'chart.js/auto'
 
-export default function DashboardStats({ customers, setActive, setCustomerFilter }) {
+export default function DashboardStats({ customers,  events = [], setActive, setCustomerFilter }) {
+  const router = useRouter()
   const barChartRef = useRef(null)
   const donutChartRef = useRef(null)
   const barChartInstance = useRef(null)
   const donutChartInstance = useRef(null)
+
+  const totalEvents = events.length
+
+const tomorrow = new Date()
+tomorrow.setDate(tomorrow.getDate() + 1)
+const tomorrowDate = tomorrow.toISOString().split("T")[0]
+
+const tomorrowEvents = events.filter(e => e.date === tomorrowDate).length
+
+
 
   const calculateDashboardTotals = () => {
     let totalRevenue = 0
@@ -169,7 +181,7 @@ export default function DashboardStats({ customers, setActive, setCustomerFilter
         /* Stats Grid - Responsive */
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 16px;
           margin-bottom: 24px;
         }
@@ -294,6 +306,27 @@ export default function DashboardStats({ customers, setActive, setCustomerFilter
             setCustomerFilter("All")
           }}
         />
+
+        <StatCard
+          icon="📅"
+          title="Events Calendar"
+          value={totalEvents}
+          color="#0ea5e9"
+          valueSize="16px"
+          onClick={() => router.push("/admin/calendar")}
+        />
+        <StatCard
+          icon="⏰"
+          title="Tomorrow Events"
+          value={tomorrowEvents}
+          color="#f59e0b"
+          onClick={() => {
+            window.location.href = "/admin/calendar"
+          }}
+        />
+
+
+
       </div>
 
       {/* Charts Grid */}

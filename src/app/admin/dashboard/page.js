@@ -65,6 +65,10 @@ export default function AdminDashboard() {
   const [openPaymentRowId, setOpenPaymentRowId] = useState(null)
   const [openAdvanceId, setOpenAdvanceId] = useState(null)
   const [selectedAdvanceCount, setSelectedAdvanceCount] = useState(0)
+
+
+  const [events, setEvents] = useState([])
+
   
   // Quotation State
   // Quotation State
@@ -824,6 +828,17 @@ const handleAdvanceCountChange = (count) => {
       event.target.value = ""
     }
   }
+useEffect(() => {
+  fetch("/api/calendar-events")
+    .then(res => res.json())
+    .then(data => {
+      setEvents(Array.isArray(data) ? data : [])
+    })
+    .catch(err => {
+      console.error("Failed to load calendar events", err)
+      setEvents([])
+    })
+}, [])
 
   return (
     
@@ -847,6 +862,8 @@ const handleAdvanceCountChange = (count) => {
           <>
             <DashboardStats
               customers={customers}
+                events={events}   // 👈 calendar events array
+
               setActive={setActive}
               setCustomerFilter={setCustomerFilter}
             />
