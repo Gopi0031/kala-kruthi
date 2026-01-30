@@ -60,20 +60,20 @@ export default function CalendarPage() {
       .then(data => {
         const today = new Date().toISOString().split("T")[0]
         data.forEach(ev => {
-          if (ev.date === today && Notification.permission === "granted") {
-            new Notification("📸 Event Today", {
-              body: `${ev.title} – ${ev.customerName}`,
-            })
-          }
+         if (ev.date === today && Notification.permission === "granted") {
+           new Notification("📸 Event Today", {
+             body: `${ev.title} – ${ev.customerName}`,
+           })
+         }
         })
 
         setEvents(data.map(ev => ({
-          id: ev._id,
-          title: ev.title,
-          start: ev.start || ev.date,
-          backgroundColor: colors[ev.status] || "#6b7280",
-          borderColor: colors[ev.status] || "#6b7280",
-          extendedProps: ev,
+         id: ev._id,
+         title: ev.title,
+         start: ev.start || ev.date,
+         backgroundColor: colors[ev.status] || "#6b7280",
+         borderColor: colors[ev.status] || "#6b7280",
+         extendedProps: ev,
         })))
       })
   }, [])
@@ -133,7 +133,7 @@ export default function CalendarPage() {
       const method = editForm._id ? "PUT" : "POST"
       
       const saveData = {
-        _id: editForm._id || undefined, // ✅ Don't send _id for POST
+        _id: editForm._id || undefined,
         title: editForm.title.trim(),
         date: editForm.date,
         status: editForm.status,
@@ -157,7 +157,6 @@ export default function CalendarPage() {
         throw new Error(data.error || `HTTP ${res.status}`)
       }
       
-      // Refresh events
       const freshData = await fetch("/api/calendar-events").then(r => r.json())
       setEvents(freshData.map(ev => ({
         id: ev._id,
@@ -196,7 +195,6 @@ export default function CalendarPage() {
     }
   }
 
-  // ✅ FIXED: Inline form fields - NO component wrapper
   const renderFormFields = () => (
     <>
       <input
@@ -289,296 +287,471 @@ export default function CalendarPage() {
   )
 
   const formatDateDMY = (dateStr) => {
-  if (!dateStr) return ""
-  const [year, month, day] = dateStr.split("-")
-  return `${day}-${month}-${year}`
-}
-
+   if (!dateStr) return ""
+   const [year, month, day] = dateStr.split("-")
+   return `${day}-${month}-${year}`
+  }
 
   return (
-    <div style={{ padding: "16px", maxWidth: "1400px", margin: "auto", position: "relative" }}>
-      <h2 style={{ fontSize: "22px", fontWeight: "800", marginBottom: "12px" }}>
-        📅 Event Calendar
-      </h2>
+    <>
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .calendar-container {
+            padding: 12px !important;
+            max-width: none !important;
+          }
+          .calendar-title {
+            font-size: 20px !important;
+            margin-bottom: 16px !important;
+            text-align: center !important;
+          }
+          .filter-search-container {
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          .filter-search-input {
+            min-width: auto !important;
+            width: 100% !important;
+            padding: 12px !important;
+            font-size: 16px !important;
+          }
+          .filter-select {
+            width: 100% !important;
+            padding: 12px !important;
+            font-size: 16px !important;
+          }
+          .modal-container {
+            padding: 12px !important;
+            align-items: flex-end !important;
+          }
+          .modal-content {
+            max-height: 85vh !important;
+            margin: 0 !important;
+            border-radius: 16px 16px 0 0 !important;
+            padding: 20px !important;
+            max-width: none !important;
+            width: 100% !important;
+          }
+          .modal-title {
+            font-size: 18px !important;
+            margin-bottom: 16px !important;
+          }
+          .event-details-card {
+            padding: 16px !important;
+            margin-bottom: 16px !important;
+          }
+          .status-buttons-container {
+            padding: 12px !important;
+          }
+          .status-buttons {
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          .status-button {
+            width: 100% !important;
+            padding: 12px !important;
+            font-size: 14px !important;
+          }
+          .action-buttons {
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          .action-button {
+            width: 100% !important;
+            padding: 14px !important;
+            font-size: 15px !important;
+          }
+          .form-buttons {
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          .form-button {
+            width: 100% !important;
+            padding: 14px !important;
+            font-size: 15px !important;
+          }
+          .fc-toolbar-title {
+            font-size: 18px !important;
+          }
+          .fc-header-toolbar {
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          .fc-toolbar-chunk {
+            order: 2 !important;
+          }
+          .fc-toolbar-chunk:last-child {
+            order: 1 !important;
+            flex-direction: row !important;
+            justify-content: center !important;
+            gap: 8px !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .calendar-container {
+            padding: 8px !important;
+          }
+          .calendar-title {
+            font-size: 18px !important;
+          }
+          .modal-content {
+            padding: 16px !important;
+          }
+          .event-details-card {
+            padding: 12px !important;
+          }
+          .status-button {
+            padding: 14px !important;
+          }
+        }
+      `}</style>
+      
+      <div className="calendar-container" style={{ 
+        padding: "16px", 
+        maxWidth: "1400px", 
+        margin: "auto", 
+        position: "relative" 
+      }}>
+        <h2 className="calendar-title" style={{ 
+          fontSize: "22px", 
+          fontWeight: "800", 
+          marginBottom: "12px" 
+        }}>
+          📅 Event Calendar
+        </h2>
 
-      <div suppressHydrationWarning style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: "8px", borderRadius: "6px" }}>
-          <option value="All">All Status</option>
-          <option value="Pending">Pending</option>
-          <option value="Confirmed">Confirmed</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
-        </select>
-        <input
-          placeholder="🔍 Search by customer name"
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: "200px",
-            padding: "8px 12px",
-            borderRadius: "6px",
-            border: "1px solid #d1d5db",
-            fontSize: "14px",
+        <div className="filter-search-container" suppressHydrationWarning style={{ 
+          display: "flex", 
+          flexWrap: "wrap", 
+          gap: "10px", 
+          marginBottom: "16px" 
+        }}>
+          <select 
+            className="filter-select"
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)} 
+            style={{ 
+              padding: "8px", 
+              borderRadius: "6px",
+              border: "1px solid #d1d5db"
+            }}
+          >
+            <option value="All">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+          <input
+            className="filter-search-input"
+            placeholder="🔍 Search by customer name"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{
+              flex: 1,
+              minWidth: "200px",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              border: "1px solid #d1d5db",
+              fontSize: "14px",
+            }}
+          />
+        </div>
+
+        <FullCalendar
+          ref={calendarRef}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, multiMonthPlugin]}
+          initialView="dayGridMonth"
+          height="auto"
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "multiMonthYear,dayGridMonth,timeGridWeek,timeGridDay",
+          }}
+          events={filteredEvents()}
+          eventClick={(info) => {
+            const eventData = info.event.extendedProps
+            setSelectedEvent(eventData)
+            setEditForm({
+              _id: eventData._id,
+              title: eventData.title || "",
+              date: eventData.date || "",
+              status: eventData.status || "Pending",
+              customerName: eventData.customerName || "",
+              customerPhone: eventData.customerPhone || "",
+              location: eventData.location || "",
+            })
+            setMode("view")
+            setShowModal(true)
+          }}
+          dateClick={(info) => {
+            setSelectedEvent(null)
+            setEditForm({
+              _id: "",
+              title: "",
+              date: info.dateStr,
+              status: "Pending",
+              customerName: "",
+              customerPhone: "",
+              location: "",
+            })
+            setMode("create")
+            setShowModal(true)
           }}
         />
-      </div>
 
-      <FullCalendar
-        ref={calendarRef}
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, multiMonthPlugin]}
-        initialView="dayGridMonth"
-        height="auto"
-        headerToolbar={{
-          left: "prev,next today",
-          center: "title",
-          right: "multiMonthYear,dayGridMonth,timeGridWeek,timeGridDay",
-        }}
-        events={filteredEvents()}
-        eventClick={(info) => {
-          // ✅ FIXED: Properly set _id
-          const eventData = info.event.extendedProps
-          setSelectedEvent(eventData)
-          setEditForm({
-            _id: eventData._id,
-            title: eventData.title || "",
-            date: eventData.date || "",
-            status: eventData.status || "Pending",
-            customerName: eventData.customerName || "",
-            customerPhone: eventData.customerPhone || "",
-            location: eventData.location || "",
-          })
-          setMode("view")
-          setShowModal(true)
-        }}
-        dateClick={(info) => {
-          setSelectedEvent(null)
-          setEditForm({
-            _id: "",
-            title: "",
-            date: info.dateStr,
-            status: "Pending",
-            customerName: "",
-            customerPhone: "",
-            location: "",
-          })
-          setMode("create")
-          setShowModal(true)
-        }}
-      />
-
-      {toast.show && (
-        <div style={{
-          position: "fixed",
-          top: "20px",
-          right: "20px",
-          background: toast.type === "success" ? "#10b981" : "#ef4444",
-          color: "white",
-          padding: "12px 20px",
-          borderRadius: "8px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          zIndex: 10000,
-          fontWeight: "600",
-          fontSize: "14px",
-        }}>
-          {toast.message}
-        </div>
-      )}
-
-      {showModal && (
-        <div
-          style={{
+        {toast.show && (
+          <div style={{
             position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "16px",
-          }}
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            style={{
-              background: "white",
-              padding: "24px",
-              borderRadius: "12px",
-              maxWidth: "450px",
-              width: "100%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 style={{ 
-              fontWeight: "800", 
-              marginBottom: "20px", 
-              fontSize: "20px",
-              color: mode === "create" ? "#10b981" : "#1f2937"
-            }}>
-              {mode === "create" ? "➕ Create New Event" : 
-               mode === "edit" ? "✏️ Edit Event" : "📸 Event Details"}
-            </h3>
-
-            {mode === "view" && selectedEvent && (
-              <>
-                <div style={{ 
-                  fontSize: "14px", 
-                  lineHeight: "1.7", 
-                  marginBottom: "20px", 
-                  padding: "20px", 
-                  background: "#f8fafc", 
-                  borderRadius: "8px",
-                  borderLeft: `4px solid ${colors[selectedEvent.status]}`
-                }}>
-                  <div style={{ marginBottom: "10px" }}><b>📝 Event:</b> {selectedEvent.title}</div>
-                  <div style={{ marginBottom: "10px" }}>
-  <b>📅 Date:</b> {formatDateDMY(selectedEvent.date)}
-</div>
-
-                  <div style={{ marginBottom: "10px" }}>
-                    <b>🏷️ Status:</b> 
-                    <span style={{ 
-                      color: "white",
-                      background: colors[selectedEvent.status],
-                      padding: "6px 12px",
-                      borderRadius: "20px",
-                      fontWeight: "bold",
-                      fontSize: "12px",
-                      marginLeft: "8px"
-                    }}>
-                      {selectedEvent.status}
-                    </span>
-                  </div>
-                  <div style={{ marginBottom: "10px" }}><b>👤 Customer:</b> {selectedEvent.customerName}</div>
-                  <div style={{ marginBottom: "10px" }}><b>📞 Phone:</b> {selectedEvent.customerPhone}</div>
-                  <div><b>📍 Location:</b> {selectedEvent.location}</div>
-                </div>
-
-                <div style={{ marginBottom: "20px", padding: "16px", background: "#f1f5f9", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ fontWeight: "600", marginBottom: "12px", color: "#475569", fontSize: "14px" }}>
-                    Quick Status Update:
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {["Pending", "Confirmed", "Completed", "Cancelled"].map(status => (
-                      <button
-                        key={status}
-                        onClick={() => updateStatus(selectedEvent._id, status)}
-                        disabled={saving || selectedEvent.status === status}
-                        style={{
-                          padding: "10px 16px",
-                          background: selectedEvent.status === status ? colors[status] : "#e2e8f0",
-                          color: selectedEvent.status === status ? "white" : "#475569",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "8px",
-                          fontWeight: "600",
-                          fontSize: "13px",
-                          cursor: saving ? "not-allowed" : "pointer",
-                          opacity: saving ? 0.7 : 1,
-                        }}
-                      >
-                        {status}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  <button
-                    onClick={() => {
-                      setEditForm({
-                        _id: selectedEvent._id,
-                        title: selectedEvent.title || "",
-                        date: selectedEvent.date || "",
-                        status: selectedEvent.status || "Pending",
-                        customerName: selectedEvent.customerName || "",
-                        customerPhone: selectedEvent.customerPhone || "",
-                        location: selectedEvent.location || "",
-                      })
-                      setMode("edit")
-                    }}
-                    style={{
-                      flex: "1", minWidth: "100px", background: "#3b82f6", color: "white",
-                      padding: "12px 16px", borderRadius: "8px", border: "none",
-                      fontWeight: "600", cursor: "pointer"
-                    }}
-                  >
-                    ✏️ Full Edit
-                  </button>
-                  <button
-                    onClick={() => deleteCalendarEvent(selectedEvent._id)}
-                    style={{
-                      flex: "1", minWidth: "100px", background: "#ef4444", color: "white",
-                      padding: "12px 16px", borderRadius: "8px", border: "none",
-                      fontWeight: "600", cursor: "pointer"
-                    }}
-                  >
-                    🗑️ Delete
-                  </button>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    style={{
-                      flex: "1", minWidth: "100px", background: "transparent", color: "#6b7280",
-                      padding: "12px 16px", borderRadius: "8px", border: "1px solid #d1d5db",
-                      fontWeight: "600", cursor: "pointer"
-                    }}
-                  >
-                    ❌ Close
-                  </button>
-                </div>
-              </>
-            )}
-
-            {(mode === "edit" || mode === "create") && (
-              <form onSubmit={saveEvent} style={{ marginBottom: "20px" }}>
-                {renderFormFields()} {/* ✅ FIXED: Inline function */}
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    style={{
-                      flex: 1,
-                      background: saving ? "#9ca3af" : "#10b981",
-                      color: "white",
-                      padding: "14px 20px",
-                      borderRadius: "8px",
-                      border: "none",
-                      fontWeight: "700",
-                      fontSize: "15px",
-                      cursor: saving ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {saving ? "💾 Saving..." : mode === "edit" ? "💾 Update Event" : "💾 Create Event"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false)
-                      setMode("view")
-                    }}
-                    disabled={saving}
-                    style={{
-                      flex: 1,
-                      background: "transparent",
-                      color: "#6b7280",
-                      padding: "14px 20px",
-                      borderRadius: "8px",
-                      border: "1px solid #d1d5db",
-                      fontWeight: "600",
-                      fontSize: "15px",
-                      cursor: saving ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {mode === "edit" ? "❌ Cancel" : "❌ Close"}
-                  </button>
-                </div>
-              </form>
-            )}
+            top: "20px",
+            right: "20px",
+            background: toast.type === "success" ? "#10b981" : "#ef4444",
+            color: "white",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 10000,
+            fontWeight: "600",
+            fontSize: "14px",
+            maxWidth: "90vw",
+            wordWrap: "break-word",
+          }}>
+            {toast.message}
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {showModal && (
+          <div
+            className="modal-container"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: "16px",
+            }}
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              className="modal-content"
+              style={{
+                background: "white",
+                padding: "24px",
+                borderRadius: "12px",
+                maxWidth: "450px",
+                width: "100%",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="modal-title" style={{ 
+                fontWeight: "800", 
+                marginBottom: "20px", 
+                fontSize: "20px",
+                color: mode === "create" ? "#10b981" : "#1f2937"
+              }}>
+                {mode === "create" ? "➕ Create New Event" : 
+                 mode === "edit" ? "✏️ Edit Event" : "📸 Event Details"}
+              </h3>
+
+              {mode === "view" && selectedEvent && (
+                <>
+                  <div className="event-details-card" style={{ 
+                    fontSize: "14px", 
+                    lineHeight: "1.7", 
+                    marginBottom: "20px", 
+                    padding: "20px", 
+                    background: "#f8fafc", 
+                    borderRadius: "8px",
+                    borderLeft: `4px solid ${colors[selectedEvent.status]}`
+                  }}>
+                    <div style={{ marginBottom: "10px" }}><b>📝 Event:</b> {selectedEvent.title}</div>
+                    <div style={{ marginBottom: "10px" }}>
+                      <b>📅 Date:</b> {formatDateDMY(selectedEvent.date)}
+                    </div>
+                    <div style={{ marginBottom: "10px" }}>
+                      <b>🏷️ Status:</b> 
+                      <span style={{ 
+                        color: "white",
+                        background: colors[selectedEvent.status],
+                        padding: "6px 12px",
+                        borderRadius: "20px",
+                        fontWeight: "bold",
+                        fontSize: "12px",
+                        marginLeft: "8px"
+                      }}>
+                        {selectedEvent.status}
+                      </span>
+                    </div>
+                    <div style={{ marginBottom: "10px" }}><b>👤 Customer:</b> {selectedEvent.customerName}</div>
+                    <div style={{ marginBottom: "10px" }}><b>📞 Phone:</b> {selectedEvent.customerPhone}</div>
+                    <div><b>📍 Location:</b> {selectedEvent.location}</div>
+                  </div>
+
+                  <div className="status-buttons-container" style={{ 
+                    marginBottom: "20px", 
+                    padding: "16px", 
+                    background: "#f1f5f9", 
+                    borderRadius: "8px", 
+                    border: "1px solid #e2e8f0" 
+                  }}>
+                    <div style={{ 
+                      fontWeight: "600", 
+                      marginBottom: "12px", 
+                      color: "#475569", 
+                      fontSize: "14px" 
+                    }}>
+                      Quick Status Update:
+                    </div>
+                    <div className="status-buttons" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {["Pending", "Confirmed", "Completed", "Cancelled"].map(status => (
+                        <button
+                          key={status}
+                          className="status-button"
+                          onClick={() => updateStatus(selectedEvent._id, status)}
+                          disabled={saving || selectedEvent.status === status}
+                          style={{
+                            padding: "10px 16px",
+                            background: selectedEvent.status === status ? colors[status] : "#e2e8f0",
+                            color: selectedEvent.status === status ? "white" : "#475569",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "8px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            cursor: saving ? "not-allowed" : "pointer",
+                            opacity: saving ? 0.7 : 1,
+                          }}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="action-buttons" style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <button
+                      className="action-button"
+                      onClick={() => {
+                        setEditForm({
+                          _id: selectedEvent._id,
+                          title: selectedEvent.title || "",
+                          date: selectedEvent.date || "",
+                          status: selectedEvent.status || "Pending",
+                          customerName: selectedEvent.customerName || "",
+                          customerPhone: selectedEvent.customerPhone || "",
+                          location: selectedEvent.location || "",
+                        })
+                        setMode("edit")
+                      }}
+                      style={{
+                        flex: "1", 
+                        minWidth: "100px", 
+                        background: "#3b82f6", 
+                        color: "white",
+                        padding: "12px 16px", 
+                        borderRadius: "8px", 
+                        border: "none",
+                        fontWeight: "600", 
+                        cursor: "pointer"
+                      }}
+                    >
+                      ✏️ Full Edit
+                    </button>
+                    <button
+                      className="action-button"
+                      onClick={() => deleteCalendarEvent(selectedEvent._id)}
+                      style={{
+                        flex: "1", 
+                        minWidth: "100px", 
+                        background: "#ef4444", 
+                        color: "white",
+                        padding: "12px 16px", 
+                        borderRadius: "8px", 
+                        border: "none",
+                        fontWeight: "600", 
+                        cursor: "pointer"
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                    <button
+                      className="action-button"
+                      onClick={() => setShowModal(false)}
+                      style={{
+                        flex: "1", 
+                        minWidth: "100px", 
+                        background: "transparent", 
+                        color: "#6b7280",
+                        padding: "12px 16px", 
+                        borderRadius: "8px", 
+                        border: "1px solid #d1d5db",
+                        fontWeight: "600", 
+                        cursor: "pointer"
+                      }}
+                    >
+                      ❌ Close
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {(mode === "edit" || mode === "create") && (
+                <form onSubmit={saveEvent} style={{ marginBottom: "20px" }}>
+                  {renderFormFields()}
+                  <div className="form-buttons" style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <button
+                      className="form-button"
+                      type="submit"
+                      disabled={saving}
+                      style={{
+                        flex: 1,
+                        background: saving ? "#9ca3af" : "#10b981",
+                        color: "white",
+                        padding: "14px 20px",
+                        borderRadius: "8px",
+                        border: "none",
+                        fontWeight: "700",
+                        fontSize: "15px",
+                        cursor: saving ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {saving ? "💾 Saving..." : mode === "edit" ? "💾 Update Event" : "💾 Create Event"}
+                    </button>
+                    <button
+                      className="form-button"
+                      type="button"
+                      onClick={() => {
+                        setShowModal(false)
+                        setMode("view")
+                      }}
+                      disabled={saving}
+                      style={{
+                        flex: 1,
+                        background: "transparent",
+                        color: "#6b7280",
+                        padding: "14px 20px",
+                        borderRadius: "8px",
+                        border: "1px solid #d1d5db",
+                        fontWeight: "600",
+                        fontSize: "15px",
+                        cursor: saving ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {mode === "edit" ? "❌ Cancel" : "❌ Close"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
