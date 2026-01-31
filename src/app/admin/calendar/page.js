@@ -294,116 +294,113 @@ export default function CalendarPage() {
 
   return (
     <>
-      <style jsx>{`
+      <style jsx global>{`
+        /* --- Mobile Responsiveness Fixes --- */
         @media (max-width: 768px) {
           .calendar-container {
-            padding: 12px !important;
-            max-width: none !important;
+            padding: 10px !important;
+            max-width: 100% !important;
+            overflow-x: hidden;
           }
-          .calendar-title {
-            font-size: 20px !important;
-            margin-bottom: 16px !important;
-            text-align: center !important;
-          }
-          .filter-search-container {
+
+          /* 1. Header Toolbar Fixes */
+          .fc-header-toolbar {
+            display: flex !important;
             flex-direction: column !important;
+            align-items: center !important;
             gap: 12px !important;
-          }
-          .filter-search-input {
-            min-width: auto !important;
-            width: 100% !important;
-            padding: 12px !important;
-            font-size: 16px !important;
-          }
-          .filter-select {
-            width: 100% !important;
-            padding: 12px !important;
-            font-size: 16px !important;
-          }
-          .modal-container {
-            padding: 12px !important;
-            align-items: flex-end !important;
-          }
-          .modal-content {
-            max-height: 85vh !important;
-            margin: 0 !important;
-            border-radius: 16px 16px 0 0 !important;
-            padding: 20px !important;
-            max-width: none !important;
-            width: 100% !important;
-          }
-          .modal-title {
-            font-size: 18px !important;
             margin-bottom: 16px !important;
           }
+          
+          .fc-toolbar-chunk {
+            display: flex !important;
+            justify-content: center !important;
+            width: 100% !important;
+            margin: 2px 0 !important;
+          }
+          
+          /* Title sizing */
+          .fc-toolbar-title {
+            font-size: 1.25rem !important;
+            text-align: center;
+          }
+          
+          /* Button sizing */
+          .fc-button {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            height: auto !important;
+          }
+
+          /* 2. Modal / Bottom Sheet Fixes */
+          .modal-container {
+            padding: 0 !important;
+            align-items: flex-end !important; /* Bottom sheet style */
+          }
+          
+          .modal-content {
+            margin: 0 !important;
+            border-radius: 20px 20px 0 0 !important;
+            padding: 24px 20px 40px 20px !important; /* Extra bottom padding for safety */
+            width: 100% !important;
+            max-width: 100% !important;
+            max-height: 85vh !important; /* Prevent it going off screen */
+            overflow-y: auto !important; /* Enable internal scrolling */
+            display: flex;
+            flex-direction: column;
+          }
+
+          /* Adjust internal modal elements */
           .event-details-card {
             padding: 16px !important;
             margin-bottom: 16px !important;
           }
-          .status-buttons-container {
-            padding: 12px !important;
-          }
+          
           .status-buttons {
             flex-direction: column !important;
             gap: 8px !important;
           }
+          
           .status-button {
             width: 100% !important;
             padding: 12px !important;
-            font-size: 14px !important;
           }
-          .action-buttons {
+          
+          .action-buttons, .form-buttons {
             flex-direction: column !important;
-            gap: 8px !important;
+            gap: 10px !important;
+            width: 100%;
           }
-          .action-button {
+          
+          .action-button, .form-button {
             width: 100% !important;
             padding: 14px !important;
-            font-size: 15px !important;
+            margin: 0 !important;
           }
-          .form-buttons {
+
+          /* Filter Inputs */
+          .filter-search-container {
             flex-direction: column !important;
-            gap: 8px !important;
+            gap: 10px !important;
           }
-          .form-button {
+          .filter-select, .filter-search-input {
             width: 100% !important;
-            padding: 14px !important;
-            font-size: 15px !important;
-          }
-          .fc-toolbar-title {
-            font-size: 18px !important;
-          }
-          .fc-header-toolbar {
-            flex-direction: column !important;
-            gap: 12px !important;
-          }
-          .fc-toolbar-chunk {
-            order: 2 !important;
-          }
-          .fc-toolbar-chunk:last-child {
-            order: 1 !important;
-            flex-direction: row !important;
-            justify-content: center !important;
-            gap: 8px !important;
+            padding: 12px !important;
           }
         }
-        
+
+        /* Specific fix for very small screens (Image 2 issue with black buttons) */
         @media (max-width: 480px) {
-          .calendar-container {
-            padding: 8px !important;
-          }
-          .calendar-title {
-            font-size: 18px !important;
-          }
-          .modal-content {
-            padding: 16px !important;
-          }
-          .event-details-card {
-            padding: 12px !important;
-          }
-          .status-button {
-            padding: 14px !important;
-          }
+           .fc-toolbar-chunk:last-child .fc-button-group {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: center;
+           }
+           .fc-toolbar-chunk:last-child .fc-button {
+              flex: 1 1 45%; /* Wrap buttons if names are too long */
+              margin: 2px !important;
+              font-size: 11px !important;
+           }
         }
       `}</style>
       
