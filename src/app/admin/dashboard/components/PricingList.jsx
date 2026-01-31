@@ -923,6 +923,7 @@ setItems(normalizedItems)
             {items.map((item) => (
               <div
   className="grid-row"
+      key={item.id}   // ✅ ADD THIS LINE
   style={{
     display: 'grid',
     gridTemplateColumns:

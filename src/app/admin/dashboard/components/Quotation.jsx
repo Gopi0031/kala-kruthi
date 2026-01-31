@@ -388,58 +388,53 @@ export default function Quotation({
     })
   }
 
-  const updateCameraModel = (eventType, categoryIndex, modelId) => {
-    const selectedItem = equipmentList.find(item => item.id === parseInt(modelId))
-    
-    setQuotation(prev => {
-      const currentSelectedEquipment = prev.selectedEquipment || {}
-      const currentEventEquipment = currentSelectedEquipment[eventType] || []
-      
-      const updatedEquipment = currentEventEquipment.map((eq, idx) => {
-        if (idx === categoryIndex) {
-          if (modelId === 'Not Selected') {
-            return { 
-              ...eq, 
-              equipmentId: 'Not Selected',
-              unitActualPrice: 0,
-              unitCustomerPrice: 0
-            }
-          } else if (selectedItem) {
-            const currentTimeSlot = eq.timeSlot || 'Not Selected'
-            let unitActualPrice = 0
-            let unitCustomerPrice = 0
-            
-            if (currentTimeSlot === 'Half Day') {
-              unitActualPrice = selectedItem.actualPriceHalfDay || 0
-              unitCustomerPrice = selectedItem.customerPriceHalfDay || 0
-            } else if (currentTimeSlot === 'Full Day') {
-              unitActualPrice = selectedItem.actualPriceFullDay || 0
-              unitCustomerPrice = selectedItem.customerPriceFullDay || 0
-            } else {
-              unitActualPrice = selectedItem.actualPriceHalfDay || 0
-              unitCustomerPrice = selectedItem.customerPriceHalfDay || 0
-            }
-            
-            return { 
-              ...eq, 
-              equipmentId: selectedItem.id,
-              unitActualPrice,
-              unitCustomerPrice
-            }
+ const updateCameraModel = (eventType, categoryIndex, modelId) => {
+  const selectedItem = equipmentList.find(
+    item => item.id === parseInt(modelId)
+  )
+
+  setQuotation(prev => {
+    const updatedEquipment =
+      prev.selectedEquipment[eventType].map((eq, idx) => {
+        if (idx !== categoryIndex) return eq
+
+        if (!selectedItem || modelId === "Not Selected") {
+          return {
+            ...eq,
+            equipmentId: "Not Selected",
+            cameramanName: "",
+            unitActualPrice: 0,
+            unitCustomerPrice: 0
           }
         }
-        return eq
+
+        const timeSlot = eq.timeSlot || "Half Day"
+
+        return {
+          ...eq,
+          equipmentId: selectedItem.id,
+          cameramanName: selectedItem.cameramanName || "",
+          unitActualPrice:
+            timeSlot === "Full Day"
+              ? selectedItem.actualPriceFullDay
+              : selectedItem.actualPriceHalfDay,
+          unitCustomerPrice:
+            timeSlot === "Full Day"
+              ? selectedItem.customerPriceFullDay
+              : selectedItem.customerPriceHalfDay
+        }
       })
 
-      return {
-        ...prev,
-        selectedEquipment: {
-          ...currentSelectedEquipment,
-          [eventType]: updatedEquipment
-        }
+    return {
+      ...prev,
+      selectedEquipment: {
+        ...prev.selectedEquipment,
+        [eventType]: updatedEquipment
       }
-    })
-  }
+    }
+  })
+}
+
 
   // ✅ NEW: Update Actual Price (now editable)
   const updateActualPrice = (eventType, categoryIndex, price) => {
@@ -775,25 +770,25 @@ const saveQuotationToCustomer = async () => {
       // ================================
 // 📅 SAVE EVENTS TO CALENDAR
 // ================================
-for (const eventType of quotation.selectedEvents) {
-  const eventDate = quotation.eventDates?.[eventType]?.date
-  if (!eventDate) continue
+// for (const eventType of quotation.selectedEvents) {
+//   const eventDate = quotation.eventDates?.[eventType]?.date
+//   if (!eventDate) continue
 
- await fetch("/api/calendar-events", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    title: `${eventType} - ${quotation.firstName}`,
-    date: eventDate,                    // keep for reference
-    start: `${eventDate}T00:00:00`,      // ✅ REQUIRED by FullCalendar
-    timeSlot: quotation.eventDates[eventType]?.timeSlot || "",
-    location: quotation.eventDates[eventType]?.location || "",
-    customerName: `${quotation.firstName} ${quotation.lastName || ""}`,
-    customerPhone: quotation.customerPhone,
-    status: "Pending",
-  }),
-})
-}
+//  await fetch("/api/calendar-events", {
+//   method: "POST",
+//   headers: { "Content-Type": "application/json" },
+//   body: JSON.stringify({
+//     title: `${eventType} - ${quotation.firstName}`,
+//     date: eventDate,                    // keep for reference
+//     start: `${eventDate}T00:00:00`,      // ✅ REQUIRED by FullCalendar
+//     timeSlot: quotation.eventDates[eventType]?.timeSlot || "",
+//     location: quotation.eventDates[eventType]?.location || "",
+//     customerName: `${quotation.firstName} ${quotation.lastName || ""}`,
+//     customerPhone: quotation.customerPhone,
+//     status: "Pending",
+//   }),
+// })
+// }
 
       if (typeof refreshCustomers === "function") {
   await refreshCustomers()
@@ -1364,48 +1359,23 @@ const saveQuotationDatesToCalendar = async () => {
                               }}
                             />
 
-                            <div>
-                      <label className="mobile-label">Cameraman</label>
-                      <select
-                        value={equipment.cameramanName || ""}
-                        disabled={!equipment.selected}
-                        onChange={(e) =>
-                          setQuotation(prev => {
-                            const updated = [...prev.selectedEquipment[activeRequirementTab]]
-                            updated[idx] = {
-                              ...updated[idx],
-                              cameramanName: e.target.value
-                            }
-                            return {
-                              ...prev,
-                              selectedEquipment: {
-                                ...prev.selectedEquipment,
-                                [activeRequirementTab]: updated
-                              }
-                            }
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          border: "2px solid #0ea5e9",
-                          borderRadius: "6px",
-                          background: equipment.selected ? "#ecfeff" : "#f3f4f6",
-                          fontWeight: "600",
-                          cursor: equipment.selected ? "pointer" : "not-allowed",
-                          fontSize: "13px",
-                        }}
-                      >
-                        <option value="">Select Cameraman</option>
-                        {[...new Set(equipmentList.map(i => i.cameramanName).filter(Boolean))].map(
-                          (name) => (
-                            <option key={name} value={name}>
-                              {name}
-                            </option>
-                          )
-                        )}
-                      </select>
-                    </div>
+                          <div>
+  <label className="mobile-label">Cameraman</label>
+  <div
+    style={{
+      padding: "8px",
+      border: "1px solid #d1d5db",
+      borderRadius: "6px",
+      background: "#f9fafb",
+      fontWeight: "600",
+      fontSize: "13px",
+      color: "#111827",
+    }}
+  >
+    {equipment.cameramanName || "—"}
+  </div>
+</div>
+
 
 
                             <div>
